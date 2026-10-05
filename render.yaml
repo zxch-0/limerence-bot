@@ -1,0 +1,61 @@
+# ============================================================
+#  BLUEPRINT RENDER — Limerence Bot (bot Discord + panel admin)
+#  1 seul service web : le bot et le panel tournent dans le même
+#  process Node, donc un seul plan gratuit suffit.
+#
+#  Déploiement :
+#   1. pousse ce repo sur GitHub
+#   2. Render > New > Blueprint > sélectionne le repo
+#   3. remplis les variables marquées "sync: false"
+#   4. crée un moniteur UptimeRobot sur https://TON-URL/health (5 min)
+# ============================================================
+
+services:
+  - type: web
+    name: limerence-bot
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # secret de session généré automatiquement par Render
+      - key: SESSION_SECRET
+        generateValue: true
+      # auto-ping interne pour limiter la mise en veille du plan gratuit
+      - key: KEEPALIVE_MINUTES
+        value: "10"
+      # ----- à renseigner dans le dashboard Render après création -----
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: OWNER_DISCORD_ID
+        sync: false
+      # ----- optionnel : base Postgres pour une config persistante -----
+      # Décommente ces 2 blocs (et la section databases en bas) pour l'activer.
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: limerence-db
+      #     property: connectionString
+
+# ------------------------------------------------------------------
+#  OPTIONNEL — persistance de la config, confessions, annonces, logs.
+#  ⚠️ Sur Render, les bases gratuites expirent au bout de 30 jours.
+#  Pour du long terme : Neon / Supabase (gratuit) et colle l'URL dans
+#  la variable DATABASE_URL manuellement.
+# ------------------------------------------------------------------
+# databases:
+#   - name: limerence-db
+#     plan: free
+#     databaseName: limerence
+#     region: frankfurt
