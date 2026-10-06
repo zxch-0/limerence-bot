@@ -9,6 +9,7 @@ import {
 } from '@/lib/auth';
 import { addLog } from '@/lib/logs';
 import { getState } from '@/lib/store';
+import { getGuild } from '@/lib/discord/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,11 +32,9 @@ export async function GET(req: NextRequest) {
     const user = await fetchOAuthUser(token.access_token);
 
     const state_ = await getState();
-    const isAdmin = await userCanAdminGuild(
-      token.access_token,
-      state_.config.guildId ?? process.env.DISCORD_GUILD_ID ?? null,
-      user.id,
-    );
+    const botGuild = !state_.config.guildId && !process.env.DISCORD_GUILD_ID ? await getGuild(false) : null;
+    const targetGuildId = state_.config.guildId ?? process.env.DISCORD_GUILD_ID ?? botGuild?.id ?? null;
+    const isAdmin = await userCanAdminGuild(token.access_token, targetGuildId, user.id);
 
     if (!isAdmin) {
       return NextResponse.redirect(`${base}/login?error=permissions`);

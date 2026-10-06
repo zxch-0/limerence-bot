@@ -278,6 +278,7 @@ export function emptyState(): StoreState {
     config: structuredClone(DEFAULT_CONFIG),
     confessions: [],
     announcements: [],
+    embeds: [],
     logs: [],
     tempRooms: [],
     meta: {},

@@ -138,7 +138,7 @@ async function postReviewCard(guild: Guild, confession: Confession): Promise<voi
     const c = s.confessions.find((x) => x.id === confession.id);
     if (c) {
       c.reviewMessageId = message.id;
-      c.publishedChannelId = channel.id;
+      c.reviewChannelId = channel.id;
     }
   });
 }
@@ -146,6 +146,9 @@ async function postReviewCard(guild: Guild, confession: Confession): Promise<voi
 /** Publie la confession dans le salon public + réactions. */
 export async function publishConfession(guild: Guild, confession: Confession): Promise<boolean> {
   const state = await getState();
+  const current = state.confessions.find((item) => item.id === confession.id);
+  if (current?.status === 'published' && current.publishedMessageId) return true;
+  if (current?.status === 'rejected') return false;
   const cfg = state.config.confessions;
   const channel = await resolveChannelSafe(guild, state.config, cfg.targetChannelKey);
   if (!channel?.isTextBased()) return false;
@@ -200,9 +203,9 @@ export async function rejectConfession(guild: Guild, confessionId: string, by: s
   });
 
   // on masque la carte de validation
-  if (confession.reviewMessageId && confession.publishedChannelId) {
+  if (confession.reviewMessageId && confession.reviewChannelId) {
     const channel = await guild.channels
-      .fetch(confession.publishedChannelId)
+      .fetch(confession.reviewChannelId)
       .catch(() => null);
     if (channel?.isTextBased()) {
       const msg = await channel.messages.fetch(confession.reviewMessageId).catch(() => null);
@@ -226,8 +229,8 @@ export async function markReviewMessageHandled(
 ) {
   const state = await getState();
   const confession = state.confessions.find((c) => c.id === confessionId);
-  if (!confession?.reviewMessageId || !confession.publishedChannelId) return;
-  const channel = await guild.channels.fetch(confession.publishedChannelId).catch(() => null);
+  if (!confession?.reviewMessageId || !confession.reviewChannelId) return;
+  const channel = await guild.channels.fetch(confession.reviewChannelId).catch(() => null);
   if (!channel?.isTextBased()) return;
   const msg = await channel.messages.fetch(confession.reviewMessageId).catch(() => null);
   if (!msg) return;

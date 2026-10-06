@@ -2,7 +2,8 @@ import {
   PermissionFlagsBits,
   type Guild,
   type GuildMember,
-  type TextChannel,
+  type BaseGuildTextChannel,
+  type VoiceChannel,
 } from 'discord.js';
 import { addLog } from '../lib/logs';
 
@@ -11,7 +12,7 @@ import { addLog } from '../lib/logs';
 // ============================================================
 
 export async function purgeMessages(
-  channel: TextChannel,
+  channel: BaseGuildTextChannel,
   count: number,
   userId?: string | null,
   source = 'bot',
@@ -32,19 +33,36 @@ export async function purgeMessages(
 }
 
 export async function lockChannel(
-  channel: TextChannel,
+  channel: BaseGuildTextChannel | VoiceChannel,
   source = 'bot',
   locked = true,
 ): Promise<void> {
-  await channel.permissionOverwrites.edit(channel.guild.roles.everyone.id, {
-    SendMessages: locked ? false : null,
-  });
+  const permission = channel.isVoiceBased()
+    ? { Connect: locked ? false : null }
+    : { SendMessages: locked ? false : null };
+  await channel.permissionOverwrites.edit(channel.guild.roles.everyone.id, permission);
   await addLog({
     level: 'moderation',
     source,
     action: locked ? 'Salon verrouillé' : 'Salon déverrouillé',
     detail: `#${channel.name}`,
   });
+}
+
+export async function setSlowmode(
+  channel: BaseGuildTextChannel,
+  seconds: number,
+  source = 'bot',
+): Promise<number> {
+  const value = Math.max(0, Math.min(21_600, Math.floor(seconds)));
+  await channel.setRateLimitPerUser(value, `Limerence Bot — slowmode par ${source}`);
+  await addLog({
+    level: 'moderation',
+    source,
+    action: 'Slowmode modifié',
+    detail: `${value}s dans #${channel.name}`,
+  });
+  return value;
 }
 
 export async function kickMember(

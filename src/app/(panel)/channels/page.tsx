@@ -1,12 +1,16 @@
-import { Card, PageHeader, Pill } from '@/components/ui';
+import { ActionForm } from '@/components/ActionForm';
+import { Card, Field, PageHeader, Pill } from '@/components/ui';
 import { ChannelsEditor } from '@/components/ChannelsEditor';
 import { getContext } from '@/lib/panel';
 import { DEFAULT_CATEGORIES, allChannels } from '@/lib/config';
+import { channelDeletionPhrase } from '@/lib/maintenance';
+import { deleteAllChannelsAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ChannelsPage() {
-  const { config } = await getContext();
+  const { config, guild, demo } = await getContext();
+  if (guild) await guild.channels.fetch().catch(() => undefined);
   const channels = allChannels(config);
   const text = channels.filter((c) => c.kind === 'text');
   const voice = channels.filter((c) => c.kind === 'voice');
@@ -41,6 +45,27 @@ export default async function ChannelsPage() {
         defaults={DEFAULT_CATEGORIES}
         prefix={config.prefix}
       />
+
+      <Card className="mt-6 border-rose-400/35" title="🚨 Suppression d’urgence" subtitle="À utiliser uniquement si la structure du serveur doit être entièrement reconstruite">
+        <div className="space-y-3 text-sm">
+          <p className="text-rose-200/85">
+            Cette action efface tous les salons Discord du serveur : textes, vocaux, forums et catégories. Les messages hébergés dans ces salons seront perdus. Elle ne touche ni aux rôles ni aux membres.
+          </p>
+          {guild ? (
+            <>
+              <p className="text-white/55">Salons et catégories actuellement détectés : <strong className="text-white">{guild.channels.cache.size}</strong>.</p>
+              <ActionForm action={deleteAllChannelsAction} submitLabel="🗑️ Supprimer tous les salons" pendingLabel="Suppression en cours…" className="max-w-xl space-y-3">
+                <Field label={`Pour confirmer, saisis exactement : ${channelDeletionPhrase(guild.id)}`} hint="La confirmation est propre à ce serveur et ne peut pas être déclenchée par erreur de clic.">
+                  <input className="field mono" name="confirmation" required autoComplete="off" placeholder={channelDeletionPhrase(guild.id)} />
+                </Field>
+              </ActionForm>
+              <p className="text-xs text-white/40">Après la suppression, relance « Déployer le blueprint » ou /setup pour reconstruire la structure. Les salons personnalisés hors blueprint ne seront pas recréés.</p>
+            </>
+          ) : (
+            <p className="text-xs text-white/45">{demo ? 'Connecte le bot à Discord pour utiliser cette action.' : 'Le bot doit être connecté au serveur.'}</p>
+          )}
+        </div>
+      </Card>
     </>
   );
 }

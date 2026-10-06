@@ -1,7 +1,7 @@
 import { ActionForm } from '@/components/ActionForm';
 import { Card, EmptyState, Field, PageHeader, Pill, relativeDate } from '@/components/ui';
 import { getContext } from '@/lib/panel';
-import { banAction, kickAction, lockAction, purgeAction } from '../actions';
+import { banAction, kickAction, lockAction, purgeAction, slowmodeAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +95,23 @@ export default async function ModerationPage() {
           </ActionForm>
         </Card>
       </div>
+
+      <Card className="mt-4" title="⏳ Slowmode" subtitle="Limite la fréquence d’envoi des messages d’un salon">
+        <ActionForm action={slowmodeAction} submitLabel="Appliquer le slowmode">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Salon textuel">
+              <select className="field" name="channelId" required>
+                {textChannels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>{channel.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Délai en secondes" hint="0 désactive le slowmode · maximum 21 600 secondes">
+              <input className="field" type="number" name="seconds" min={0} max={21600} step={1} defaultValue={0} required />
+            </Field>
+          </div>
+        </ActionForm>
+      </Card>
 
       <Card className="mt-4" title="Dernières actions de modération">
         {modLogs.length === 0 ? (

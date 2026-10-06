@@ -21,7 +21,7 @@ import { getState } from '../lib/store';
 import { addLog } from '../lib/logs';
 import { isOwner } from '../lib/auth';
 import type { AppConfig } from '../lib/types';
-import { handleChatInput, registerCommands } from './commands';
+import { handleChatInput, handleEmbedModalSubmit, registerCommands } from './commands';
 import {
   markReviewMessageHandled,
   publishConfession,
@@ -151,7 +151,7 @@ async function onMemberAdd(member: GuildMember): Promise<void> {
               [
                 `Salut **${member.displayName}**, bienvenue sur **${guild.name}** !`,
                 '',
-                'Tu as reçu le rôle **limerencien** — présente-toi ici et installe-toi bien 🌙',
+                `Tu as reçu le rôle **${state.config.role.name}** — présente-toi ici et installe-toi bien 🌙`,
                 'Une confession en tête ? Utilise `/confession`, c’est 100 % anonyme 🤫',
               ].join('\n'),
             )
@@ -198,6 +198,7 @@ async function onInteraction(interaction: Interaction): Promise<void> {
       return;
     }
     if (interaction.isModalSubmit()) {
+      if (await handleEmbedModalSubmit(interaction, config)) return;
       await handleModal(interaction, config);
       return;
     }

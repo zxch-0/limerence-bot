@@ -84,7 +84,13 @@ export function InlineAction({
   confirm?: string;
 }) {
   return (
-    <form action={action} className="inline-flex">
+    <form
+      action={action}
+      className="inline-flex"
+      onSubmit={(event) => {
+        if (confirm && !window.confirm(confirm)) event.preventDefault();
+      }}
+    >
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}

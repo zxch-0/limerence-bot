@@ -59,9 +59,8 @@ async function mirrorToDiscord(entry: LogEntry): Promise<void> {
   if (!guildId) return;
   const guild = await client.guilds.fetch(guildId).catch(() => null);
   if (!guild) return;
-  const discordChannel = guild.channels.cache.find(
-    (c) => c.name === `${state.config.prefix} ${channel.slug} ${channel.emoji}`,
-  );
+  const { resolveChannel } = await import('./blueprint');
+  const discordChannel = await resolveChannel(guild, state.config, channel.key);
   if (!discordChannel?.isTextBased()) return;
 
   const icons: Record<LogLevel, string> = {

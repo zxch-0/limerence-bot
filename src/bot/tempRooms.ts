@@ -47,7 +47,7 @@ export async function handleVoiceStateUpdate(
   const member = newState.member ?? oldState.member ?? null;
 
   // 1) arrivée dans le hub -> création d'un salon
-  if (newState.channelId === hub.id && member && !member.user.bot) {
+  if (oldState.channelId !== hub.id && newState.channelId === hub.id && member && !member.user.bot) {
     await createTempRoom(guild, member, state.config.joinToCreate.hubChannelKey, hub as VoiceChannel);
     return;
   }
@@ -110,11 +110,13 @@ async function createTempRoom(
       permissionOverwrites: [
         {
           id: guild.roles.everyone.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+          deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
         },
         {
           id: member.id,
           allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.Connect,
             PermissionFlagsBits.ManageChannels,
             PermissionFlagsBits.MoveMembers,
             PermissionFlagsBits.ManageRoles,
@@ -230,22 +232,31 @@ function scheduleDeletion(guild: Guild, channelId: string) {
   if (pendingDeletions.has(channelId)) return;
   const timeout = setTimeout(async () => {
     pendingDeletions.delete(channelId);
-    const channel = guild.channels.cache.get(channelId);
-    if (!channel?.isVoiceBased()) {
+    const state = await getState();
+    if (!state.config.joinToCreate.autoDelete) return;
+    const fresh = await guild.channels.fetch(channelId).catch(() => null);
+    if (!fresh?.isVoiceBased()) {
       await forgetRoom(channelId);
       return;
     }
-    await guild.channels.fetch(channelId).catch(() => undefined);
-    const fresh = guild.channels.cache.get(channelId);
-    if (fresh?.isVoiceBased() && (fresh as VoiceChannel).members.size === 0) {
-      await fresh.delete('Limerence Bot — salon temporaire vide').catch(() => undefined);
-      await forgetRoom(channelId);
-      await addLog({
-        level: 'info',
-        source: 'bot',
-        action: 'Salon temporaire supprimé',
-        detail: `#${fresh.name}`,
-      });
+    if (fresh.members.size === 0) {
+      try {
+        await fresh.delete('Limerence Bot — salon temporaire vide');
+        await forgetRoom(channelId);
+        await addLog({
+          level: 'info',
+          source: 'bot',
+          action: 'Salon temporaire supprimé',
+          detail: `#${fresh.name}`,
+        });
+      } catch (error) {
+        await addLog({
+          level: 'error',
+          source: 'bot',
+          action: 'Suppression du salon temporaire échouée',
+          detail: `${fresh.name} — ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
     }
   }, 2_500);
   pendingDeletions.set(channelId, timeout);
@@ -291,19 +302,25 @@ export async function setRoomLimit(channel: VoiceChannel, limit: number) {
 }
 
 export async function allowMember(guild: Guild, channel: VoiceChannel, userId: string) {
-  await channel.permissionOverwrites.edit(userId, { Connect: true });
+  await guild.members.fetch(userId);
+  await channel.permissionOverwrites.edit(userId, { ViewChannel: true, Connect: true });
   await updateState((s) => {
     const r = s.tempRooms.find((x) => x.channelId === channel.id);
-    if (r && !r.allowed.includes(userId)) r.allowed.push(userId);
+    if (r) {
+      r.allowed = [...new Set([...r.allowed, userId])];
+      r.denied = r.denied.filter((id) => id !== userId);
+    }
   });
-  void guild;
 }
 
 export async function denyMember(guild: Guild, channel: VoiceChannel, userId: string) {
-  await channel.permissionOverwrites.edit(userId, { Connect: false });
+  await channel.permissionOverwrites.edit(userId, { ViewChannel: false, Connect: false });
   await updateState((s) => {
     const r = s.tempRooms.find((x) => x.channelId === channel.id);
-    if (r && !r.denied.includes(userId)) r.denied.push(userId);
+    if (r) {
+      r.denied = [...new Set([...r.denied, userId])];
+      r.allowed = r.allowed.filter((id) => id !== userId);
+    }
   });
   void guild;
 }
@@ -319,7 +336,22 @@ export async function transferOwnership(
   channel: VoiceChannel,
   newOwnerId: string,
 ) {
+  await guild.members.fetch(newOwnerId);
+  const room = await getRoom(channel.id);
+  const oldOwnerId = room?.ownerId;
+  if (oldOwnerId && oldOwnerId !== newOwnerId) {
+    await channel.permissionOverwrites.edit(oldOwnerId, {
+      ViewChannel: null,
+      Connect: null,
+      ManageChannels: null,
+      MoveMembers: null,
+      ManageRoles: null,
+      MuteMembers: null,
+    });
+  }
   await channel.permissionOverwrites.edit(newOwnerId, {
+    ViewChannel: true,
+    Connect: true,
     ManageChannels: true,
     MoveMembers: true,
     ManageRoles: true,
@@ -327,24 +359,36 @@ export async function transferOwnership(
   });
   await updateState((s) => {
     const r = s.tempRooms.find((x) => x.channelId === channel.id);
-    if (r) r.ownerId = newOwnerId;
+    if (r) {
+      r.ownerId = newOwnerId;
+      r.allowed = r.allowed.filter((id) => id !== oldOwnerId);
+      r.denied = r.denied.filter((id) => id !== newOwnerId);
+    }
   });
-  void guild;
 }
 
 export async function deleteRoom(channel: VoiceChannel, reason = 'Limerence Bot') {
+  await channel.delete(reason);
   await forgetRoom(channel.id);
-  await channel.delete(reason).catch(() => undefined);
 }
 
 /** Nettoyage au démarrage : on oublie les salons qui n'existent plus. */
 export async function reconcileTempRooms(guild: Guild) {
   await guild.channels.fetch().catch(() => undefined);
   const state = await getState();
-  const alive = state.tempRooms.filter((r) => guild.channels.cache.has(r.channelId));
+  const alive = state.tempRooms.filter((room) => {
+    const channel = guild.channels.cache.get(room.channelId);
+    return Boolean(channel?.isVoiceBased());
+  });
   if (alive.length !== state.tempRooms.length) {
     await updateState((s) => {
       s.tempRooms = alive;
     });
+  }
+  if (state.config.joinToCreate.autoDelete) {
+    for (const room of alive) {
+      const channel = guild.channels.cache.get(room.channelId);
+      if (channel?.isVoiceBased() && channel.members.size === 0) scheduleDeletion(guild, room.channelId);
+    }
   }
 }

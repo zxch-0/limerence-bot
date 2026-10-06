@@ -46,16 +46,15 @@ const DEMO_SESSION: SessionUser = {
  * La démo ne s'active donc que tant que le panel n'est pas branché à Discord.
  */
 export function isDemoMode(): boolean {
-  if (process.env.DEMO_MODE === 'true') return true;
-  if (process.env.DEMO_MODE === 'false') return false;
-
-  const token = Boolean(process.env.DISCORD_TOKEN?.trim());
-  const oauth = Boolean(
+  const oauthConfigured = Boolean(
     process.env.DISCORD_CLIENT_ID?.trim() && process.env.DISCORD_CLIENT_SECRET?.trim(),
   );
-
-  if (oauth) return false; // panel sécurisé : connexion Discord obligatoire
-  return !token; // sans OAuth : démo si le bot n'est pas encore configuré
+  // Ne jamais autoriser la session anonyme lorsque Discord OAuth est configuré,
+  // même si DEMO_MODE=true a été laissé par erreur en production.
+  if (oauthConfigured) return false;
+  if (process.env.DEMO_MODE === 'false') return false;
+  if (process.env.DEMO_MODE === 'true') return true;
+  return !process.env.DISCORD_TOKEN?.trim();
 }
 
 // ------------------------------------------------------------
@@ -85,9 +84,11 @@ export async function getRedirectUri(): Promise<string> {
 // ------------------------------------------------------------
 
 function secret(): Uint8Array {
-  const value =
-    process.env.SESSION_SECRET?.trim() ||
-    'limerence-dev-secret-a-changer-en-production-0123456789';
+  const configured = process.env.SESSION_SECRET?.trim();
+  if (process.env.NODE_ENV === 'production' && (!configured || configured.length < 32)) {
+    throw new Error('SESSION_SECRET manquant ou trop court : utilise un secret aléatoire d’au moins 32 caractères.');
+  }
+  const value = configured || 'limerence-dev-secret-a-changer-en-production-0123456789';
   return new TextEncoder().encode(value);
 }
 
@@ -242,11 +243,18 @@ export async function userCanAdminGuild(
   userId?: string | null,
 ): Promise<boolean> {
   if (userId && isOwner(userId)) return true;
+  if (userId) {
+    const allow = (process.env.ADMIN_DISCORD_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean);
+    if (allow.includes(userId)) return true;
+  }
   const guilds = await fetchOAuthGuilds(accessToken);
   if (!guilds.length) return false;
   const target = guildId?.trim();
-  const candidates = target ? guilds.filter((g) => g.id === target) : guilds;
-  return candidates.some((g) => g.owner || isDiscordAdmin(g.permissions));
+  // Sans serveur cible, autoriser un admin de n'importe lequel de ses serveurs
+  // donnerait accès au panel du serveur géré par le bot.
+  if (!target) return false;
+  const candidate = guilds.find((guild) => guild.id === target);
+  return Boolean(candidate && (candidate.owner || isDiscordAdmin(candidate.permissions)));
 }
 
 export function isOwner(userId: string): boolean {

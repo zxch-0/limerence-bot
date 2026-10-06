@@ -29,8 +29,12 @@ déploiement, une seule URL, une seule facture.
 
 ## 1. Ce que le bot crée
 
-Un blueprint **idempotent** : relance-le autant de fois que tu veux, rien n'est jamais dupliqué,
-les salons existants sont simplement alignés (nom, catégorie, sujet, limite de places).
+Un blueprint **idempotent** : relance-le autant de fois que tu veux, rien n'est jamais dupliqué.
+Les ID Discord des catégories, salons et rôle gérés sont mémorisés par clé stable (avec Postgres ou le
+fichier persistant) ; même si cet état disparaît, le moteur récupère les salons existants par nom/slug.
+Il attend
+une lecture complète de Discord avant toute création (jamais de création « à l’aveugle »), signale chaque
+échec et aligne nom, catégorie, sujet, limites et permissions du blueprint.
 
 | Catégorie | Salons texte | Salons vocaux |
 | --- | --- | --- |
@@ -70,14 +74,27 @@ Publication immédiate ou **programmée** (`30m`, `2h`, `3j` ou une date `2026-1
 optionnelle `@here` / `@everyone`, depuis Discord (`/annonce`) ou depuis le panel (historique complet,
 annulation, renvoi).
 
+### 🪄 Embeds et règlement personnalisés
+Le panel **Embeds personnalisés** permet de composer une carte Discord avec aperçu en direct : titre,
+description, couleur, auteur, liens, images, pied de page et jusqu'à 25 champs. Enregistre plusieurs
+modèles, choisis un salon par défaut, puis publie-les depuis le panel. Les mêmes modèles sont disponibles
+avec `/embed creer`, `/embed liste`, `/embed publier`, `/embed modifier` et `/embed supprimer`.
+`/regles` ouvre un formulaire directement dans Discord, enregistre le modèle « Règlement » et le publie
+dans le salon règles du blueprint. Les mentions dans un embed ne déclenchent jamais de ping.
+
 ### 🤍 Rôle automatique
 Rôle `limerencien` blanc, donné à l'arrivée, message de bienvenue automatique dans
 `➥ présentation 👋`, attribution possible aux membres existants.
 
-### 🛡️ Modération
-Purge de messages (globale ou par auteur), verrouillage/déverrouillage de salon, expulsion, bannissement —
-disponibles en commandes (`/purge`, `/lock`, `/unlock`, `/kick`, `/ban`) **et** dans le panel.
-Chaque action est journalisée.
+### 🛡️ Modération et gestion des salons
+Purge de messages (globale ou par auteur), verrouillage/déverrouillage, slowmode, expulsion et bannissement
+sont disponibles en commandes et dans le panel. `/salon creer` et `/salon supprimer` gèrent les salons
+individuellement.
+
+En dernier recours, **Supprimer tous les salons** existe dans l’onglet *Salons & catégories* et via
+`/salons tout-supprimer`. Il faut saisir une phrase de confirmation unique au serveur (format
+`SUPPRIMER-XXXXXX`) ; la première étape n’effectue aucune suppression. Cette opération est irréversible
+pour les salons/messages, mais ne supprime pas les rôles et peut être suivie d’un nouveau `/setup`.
 
 ### 🧾 Journal
 Toutes les actions (bot, panel, admins) sont horodatées dans le panel **et** recopiées dans
@@ -98,8 +115,9 @@ la permission « Gérer le serveur » (ou à `OWNER_DISCORD_ID` / `ADMIN_DISCORD
 | **Vocaux privés** | réglages du join-to-create + liste des salons temporaires actifs (suppression, nettoyage) |
 | **Confessions** | file d'attente (publier / refuser / supprimer), réglages salons + réactions + anti-spam |
 | **Annonces** | création, programmation, historique, annulation |
+| **Embeds personnalisés** | créateur avec aperçu, champs, images, modèles enregistrés et publication |
 | **Membres** | liste, rôles, arrivée, attribution manuelle du rôle |
-| **Modération** | purge, verrouillage, expulsion, bannissement |
+| **Modération** | purge, verrouillage, slowmode, expulsion, bannissement |
 | **Journal** | toutes les entrées filtrables par niveau |
 | **Réglages** | préfixe `➥`, ID du serveur, auto-déploiement au démarrage, état des variables d'environnement, lien d'invitation, redémarrage du bot, réinitialisation |
 
@@ -228,12 +246,16 @@ npm run dev               # http://localhost:3000
 | Commande | Qui | Description |
 | --- | --- | --- |
 | `/setup` | Admins | crée ou répare toute la structure (`apercu: true` pour simuler) |
-| `/structure` | Admins | audit du serveur face au blueprint |
+| `/structure` | Admins | audit du serveur face au blueprint, y compris salons mal placés |
+| `/salon creer` · `/salon supprimer` | Gérer les salons | crée un salon texte/vocal ou supprime un salon après confirmation |
+| `/salons tout-supprimer` | Admins | outil d’urgence réservé aux admins, deuxième étape avec phrase `SUPPRIMER-XXXXXX` obligatoire |
+| `/embed creer` · `liste` · `publier` · `modifier` · `supprimer` | Admins | création par formulaire, publication et gestion des modèles persistants |
+| `/regles` | Admins | crée/modifie et publie le règlement dans le salon règles |
+| `/slowmode` · `/purge` · `/lock` · `/unlock` · `/kick` · `/ban` | Admins | modération et réglage des salons |
 | `/confession` | Tous | confession anonyme (formulaire ou message direct) |
 | `/annonce` | Admins | publie ou programme une annonce (`quand: 2h`) |
 | `/annonces liste` · `/annonces annuler` | Admins | suivi et annulation |
 | `/vocal renommer` · `limite` · `verrouiller` · `autoriser` · `expulser` · `transferer` · `supprimer` · `reclamer` | Propriétaire du salon | gestion du salon vocal temporaire |
-| `/purge` · `/lock` · `/unlock` · `/kick` · `/ban` | Admins | modération |
 | `/panel` | Tous | lien vers le panel web |
 | `/ping` | Tous | latence du bot |
 
@@ -277,9 +299,9 @@ render.yaml                 # Blueprint Render (1 service web)
 | Symptôme | Solution |
 | --- | --- |
 | **« Used disallowed intents »** dans les logs | active **SERVER MEMBERS INTENT** dans Dev Portal → Bot |
-| **Le bot ne crée pas de salons** | vérifie la permission *Gérer les salons* / Administrateur et que le bot est bien au-dessus du rôle ciblé |
-| **`/setup` s'arrête au milieu** | rate limit Discord (10 salons / 10 min) : relance `/setup`, c'est idempotent |
-| **Le panel refuse la connexion** | ton compte doit avoir *Gérer le serveur*, ou renseigne `OWNER_DISCORD_ID` |
+| **Des salons manquent après le blueprint** | lance `/structure` ou ouvre *Structure du serveur* : l’audit distingue les salons manquants, déplacés et à aligner. Vérifie les erreurs du dernier rapport puis relance `/setup` ; une lecture Discord échouée n’entraîne pas de création à l’aveugle. |
+| **`/setup` s'arrête au milieu** | Discord peut appliquer des limites de création ; relance `/setup`, le moteur est sérialisé, mémorise les ID et reprend sans doublon. Vérifie aussi que le bot a *Gérer les salons* et que son rôle est assez haut. |
+| **Le panel refuse la connexion** | ton compte doit avoir *Gérer le serveur* sur le serveur configuré, ou renseigne `OWNER_DISCORD_ID` / `ADMIN_DISCORD_IDS` |
 | **« Invalid OAuth2 redirect_uri »** | ajoute `https://TON-SERVICE.onrender.com/api/auth/callback` dans OAuth2 → Redirects |
 | **Le bot se déconnecte au bout de 15 min** | le service Render s'est endormi : configure UptimeRobot sur `/health` (§6) |
 | **Le rôle limerencien n'est pas attribué** | vérifie que le rôle du bot est **plus haut** que `limerencien` dans la hiérarchie des rôles |
