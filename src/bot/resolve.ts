@@ -1,5 +1,6 @@
 import { ChannelType, type Guild, type GuildBasedChannel } from 'discord.js';
 import { channelName, findChannel } from '../lib/config';
+import { getState } from '../lib/store';
 import type { AppConfig } from '../lib/types';
 
 function sameName(a: string, b: string) {
@@ -18,11 +19,12 @@ export function resolveFromCache(
   const found = guild.channels.cache.find((c) => sameName(c.name, wanted));
   if (found) return found;
   // repli : même préfixe + slug, emoji différent
+  const expectedType = cfg.kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText;
+  const slug = cfg.kind === 'voice' ? cfg.label ?? cfg.slug : cfg.slug;
+  const normalize = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
   return (
     guild.channels.cache.find(
-      (c) =>
-        c.type !== ChannelType.GuildCategory &&
-        c.name.toLowerCase().includes(cfg.kind === 'voice' ? (cfg.label ?? cfg.slug).toLowerCase() : `${config.prefix} ${cfg.slug.toLowerCase()}`),
+      (channel) => channel.type === expectedType && normalize(channel.name).includes(normalize(slug)),
     ) ?? null
   );
 }
@@ -33,6 +35,14 @@ export async function resolveChannelSafe(
   config: AppConfig,
   key: string,
 ): Promise<GuildBasedChannel | null> {
+  const cfg = findChannel(config, key);
+  const mappedId = (await getState()).meta.blueprintResources?.[guild.id]?.channelIds[key];
+  if (mappedId) {
+    const mapped = await guild.channels.fetch(mappedId).catch(() => null);
+    if (mapped && cfg && (cfg.kind === 'voice' ? mapped.isVoiceBased() : mapped.type === ChannelType.GuildText)) {
+      return mapped;
+    }
+  }
   let found = resolveFromCache(guild, config, key);
   if (found) return found;
   await guild.channels.fetch().catch(() => undefined);

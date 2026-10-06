@@ -28,6 +28,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     { href: '/voice', label: 'Vocaux privés', emoji: '🎧' },
     { href: '/confessions', label: 'Confessions', emoji: '🤫', badge: pending || undefined },
     { href: '/announcements', label: 'Annonces', emoji: '📣', badge: scheduled || undefined },
+    { href: '/embeds', label: 'Embeds personnalisés', emoji: '🪄', badge: state.embeds.length || undefined },
     { href: '/members', label: 'Membres', emoji: '👥' },
     { href: '/moderation', label: 'Modération', emoji: '🛡️' },
     { href: '/logs', label: 'Journal', emoji: '🧾' },

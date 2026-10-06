@@ -108,7 +108,7 @@ export interface ChannelOption {
 
 export function channelOptionsFromGuild(guild: Guild): ChannelOption[] {
   const typeName = (t: ChannelType): ChannelOption['type'] => {
-    if (t === ChannelType.GuildText) return 'text';
+    if (t === ChannelType.GuildText || t === ChannelType.GuildAnnouncement) return 'text';
     if (t === ChannelType.GuildVoice) return 'voice';
     if (t === ChannelType.GuildCategory) return 'category';
     return 'other';

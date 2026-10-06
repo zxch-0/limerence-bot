@@ -130,6 +130,8 @@ export interface Confession {
   publishedMessageId?: string;
   publishedChannelId?: string;
   reviewMessageId?: string;
+  /** ID du salon de review, distinct du salon public après publication. */
+  reviewChannelId?: string;
   rejectionReason?: string;
 }
 
@@ -211,10 +213,49 @@ export interface TempRoom {
 //  État persistant
 // ------------------------------------------------------------
 
+export interface EmbedField {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+/** Embed enregistrée comme modèle dans le panel ou via Discord. */
+export interface EmbedTemplate {
+  id: string;
+  name: string;
+  title?: string;
+  description?: string;
+  color: string;
+  authorName?: string;
+  authorUrl?: string;
+  authorIconUrl?: string;
+  footer?: string;
+  footerIconUrl?: string;
+  url?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
+  fields: EmbedField[];
+  /** Salon par défaut pour la publication, si choisi. */
+  channelId?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface BlueprintResourceIds {
+  roleId?: string;
+  categoryIds: Record<string, string>;
+  channelIds: Record<string, string>;
+  /** Clés dont les permission overwrites ont été posées par le blueprint. */
+  managedCategoryOverwrites: string[];
+  managedChannelOverwrites: string[];
+}
+
 export interface StoreState {
   config: AppConfig;
   confessions: Confession[];
   announcements: Announcement[];
+  embeds: EmbedTemplate[];
   logs: LogEntry[];
   tempRooms: TempRoom[];
   meta: {
@@ -222,6 +263,8 @@ export interface StoreState {
     lastSetupBy?: string;
     blueprintReport?: BlueprintReport;
     botTag?: string;
+    /** IDs des ressources gérées, indexés par serveur puis clé de blueprint. */
+    blueprintResources?: Record<string, BlueprintResourceIds>;
   };
 }
 

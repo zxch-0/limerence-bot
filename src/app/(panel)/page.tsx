@@ -122,6 +122,7 @@ export default async function DashboardPage() {
             <QuickLink href="/structure" emoji="🔎" label="Vérifier la structure" />
             <QuickLink href="/confessions" emoji="🤫" label="Modérer les confessions" />
             <QuickLink href="/announcements" emoji="📣" label="Publier une annonce" />
+            <QuickLink href="/embeds" emoji="🪄" label="Créer un embed ou un règlement" />
             <QuickLink href="/moderation" emoji="🛡️" label="Modération" />
             <QuickLink href="/settings" emoji="⚙️" label="Réglages & connexion" />
           </div>

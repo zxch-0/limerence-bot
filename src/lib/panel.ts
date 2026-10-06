@@ -28,6 +28,12 @@ export async function getContext(): Promise<PanelContext> {
   } catch {
     guild = null;
   }
+  if (guild) {
+    await Promise.all([
+      guild.channels.fetch().catch(() => undefined),
+      guild.roles.fetch().catch(() => undefined),
+    ]);
+  }
 
   return {
     state,

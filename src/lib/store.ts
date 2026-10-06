@@ -49,6 +49,7 @@ function normalize(raw: unknown): StoreState {
     config: mergeConfig(base.config, partial.config),
     confessions: Array.isArray(partial.confessions) ? partial.confessions : [],
     announcements: Array.isArray(partial.announcements) ? partial.announcements : [],
+    embeds: Array.isArray(partial.embeds) ? partial.embeds : [],
     logs: Array.isArray(partial.logs) ? partial.logs : [],
     tempRooms: Array.isArray(partial.tempRooms) ? partial.tempRooms : [],
     meta: partial.meta && typeof partial.meta === 'object' ? partial.meta : {},

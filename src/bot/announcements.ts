@@ -9,6 +9,8 @@ import type { Announcement } from '../lib/types';
 //  Annonces — envoi immédiat ou programmé (planificateur)
 // ============================================================
 
+const sendingAnnouncements = new Set<string>();
+
 /**
  * Analyse une date / délai : "30m", "2h", "3j", "2026-10-06T20:00"
  * Renvoie null si l'entrée est vide (= envoi immédiat).
@@ -22,11 +24,17 @@ export function parseSchedule(input?: string | null): { date: Date | null; error
     const amount = Number(rel[1]);
     const unit = rel[2].toLowerCase();
     const factor = unit === 's' ? 1_000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
-    return { date: new Date(Date.now() + amount * factor) };
+    if (!Number.isSafeInteger(amount) || amount <= 0) return { date: null, error: 'La date doit être dans le futur.' };
+    const date = new Date(Date.now() + amount * factor);
+    if (Number.isNaN(date.getTime())) return { date: null, error: 'Cette date est trop éloignée.' };
+    return { date };
   }
 
   const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) return { date: parsed };
+  if (!Number.isNaN(parsed.getTime())) {
+    if (parsed.getTime() <= Date.now()) return { date: null, error: 'La date doit être dans le futur.' };
+    return { date: parsed };
+  }
   return { date: null, error: `Format de date invalide : « ${value} » (ex : 2h, 30m, 2026-10-06T20:00)` };
 }
 
@@ -76,7 +84,19 @@ export async function createAnnouncement(
   return { ok: true, announcement };
 }
 
-export async function sendAnnouncement(
+export async function sendAnnouncement(guild: Guild, announcement: Announcement): Promise<boolean> {
+  if (sendingAnnouncements.has(announcement.id)) return false;
+  const current = (await getState()).announcements.find((item) => item.id === announcement.id);
+  if (current && (current.status === 'sent' || current.status === 'cancelled')) return false;
+  sendingAnnouncements.add(announcement.id);
+  try {
+    return await sendAnnouncementOnce(guild, announcement);
+  } finally {
+    sendingAnnouncements.delete(announcement.id);
+  }
+}
+
+async function sendAnnouncementOnce(
   guild: Guild,
   announcement: Announcement,
 ): Promise<boolean> {
@@ -151,7 +171,9 @@ export async function processDueAnnouncements(guild: Guild): Promise<number> {
   const state = await getState();
   const now = Date.now();
   const due = state.announcements.filter(
-    (a) => a.status === 'scheduled' && a.scheduledFor && new Date(a.scheduledFor).getTime() <= now,
+    (announcement) =>
+      announcement.status === 'scheduled' &&
+      (!announcement.scheduledFor || new Date(announcement.scheduledFor).getTime() <= now),
   );
   let sent = 0;
   for (const announcement of due) {

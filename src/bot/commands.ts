@@ -15,7 +15,8 @@ import {
   type Client,
   type GuildBasedChannel,
   type GuildMember,
-  type TextChannel,
+  type BaseGuildTextChannel,
+  type ModalSubmitInteraction,
   type VoiceChannel,
 } from 'discord.js';
 import { applyBlueprint, auditBlueprint } from '../lib/blueprint';
@@ -24,7 +25,10 @@ import { getState } from '../lib/store';
 import { getPublicUrl, isOwner } from '../lib/auth';
 import { createAnnouncement, parseSchedule, sendAnnouncement, cancelAnnouncement } from './announcements';
 import { submitConfession } from './confessions';
-import { banMember, kickMember, lockChannel, purgeMessages } from './moderation';
+import { banMember, kickMember, lockChannel, purgeMessages, setSlowmode } from './moderation';
+import { createEmbedTemplate, findEmbedTemplate, publishEmbed, removeEmbedTemplate, updateEmbedTemplate } from './embeds';
+import { channelDeletionPhrase, deleteAllGuildChannels } from '../lib/maintenance';
+import { addLog } from '../lib/logs';
 import { getRoom, setRoomLimit, transferOwnership, renameRoom, toggleLock, allowMember, kickFromRoom, deleteRoom } from './tempRooms';
 import type { AppConfig } from '../lib/types';
 
@@ -70,7 +74,7 @@ export function buildCommands() {
         o
           .setName('salon')
           .setDescription('Salon d’envoi (défaut : annonces)')
-          .addChannelTypes(ChannelType.GuildText),
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
       )
       .addStringOption((o) =>
         o
@@ -114,7 +118,7 @@ export function buildCommands() {
       .setDescription('Verrouiller un salon (personne ne peut écrire)')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
       .addChannelOption((o) =>
-        o.setName('salon').setDescription('Salon à verrouiller (défaut : salon courant)').addChannelTypes(ChannelType.GuildText),
+        o.setName('salon').setDescription('Salon à verrouiller (défaut : salon courant)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
       ),
 
     new SlashCommandBuilder()
@@ -122,7 +126,7 @@ export function buildCommands() {
       .setDescription('Déverrouiller un salon')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
       .addChannelOption((o) =>
-        o.setName('salon').setDescription('Salon à déverrouiller (défaut : salon courant)').addChannelTypes(ChannelType.GuildText),
+        o.setName('salon').setDescription('Salon à déverrouiller (défaut : salon courant)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
       ),
 
     new SlashCommandBuilder()
@@ -138,6 +142,82 @@ export function buildCommands() {
       .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
       .addUserOption((o) => o.setName('membre').setDescription('Membre à bannir').setRequired(true))
       .addStringOption((o) => o.setName('raison').setDescription('Raison')),
+
+    new SlashCommandBuilder()
+      .setName('embed')
+      .setDescription('Créer et publier des embeds personnalisés')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addSubcommand((s) =>
+        s
+          .setName('creer')
+          .setDescription('Créer un modèle avec un formulaire; salon facultatif = publication immédiate')
+          .addStringOption((o) => o.setName('nom').setDescription('Nom interne du modèle').setRequired(true).setMaxLength(64))
+          .addChannelOption((o) => o.setName('salon').setDescription('Publier après création dans ce salon').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
+      )
+      .addSubcommand((s) => s.setName('liste').setDescription('Afficher les modèles enregistrés'))
+      .addSubcommand((s) =>
+        s
+          .setName('publier')
+          .setDescription('Publier un modèle enregistré par ID ou nom')
+          .addStringOption((o) => o.setName('id').setDescription('ID (8 premiers caractères) ou nom du modèle').setRequired(true))
+          .addChannelOption((o) => o.setName('salon').setDescription('Salon de destination (sinon la cible mémorisée)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('modifier')
+          .setDescription('Modifier le titre, le texte, la couleur et le pied de page')
+          .addStringOption((o) => o.setName('id').setDescription('ID ou nom du modèle').setRequired(true)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('supprimer')
+          .setDescription('Supprimer un modèle enregistré')
+          .addStringOption((o) => o.setName('id').setDescription('ID ou nom du modèle').setRequired(true)),
+      ),
+
+    new SlashCommandBuilder()
+      .setName('regles')
+      .setDescription('Créer ou modifier le règlement et le publier dans le salon règles')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+    new SlashCommandBuilder()
+      .setName('salon')
+      .setDescription('Créer ou supprimer un salon Discord')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+      .addSubcommand((s) =>
+        s
+          .setName('creer')
+          .setDescription('Créer un salon textuel ou vocal')
+          .addStringOption((o) => o.setName('nom').setDescription('Nom du salon').setRequired(true).setMaxLength(100))
+          .addStringOption((o) => o.setName('type').setDescription('Type du salon').setRequired(true).addChoices({ name: 'Texte', value: 'text' }, { name: 'Vocal', value: 'voice' }))
+          .addChannelOption((o) => o.setName('categorie').setDescription('Catégorie facultative').addChannelTypes(ChannelType.GuildCategory))
+          .addStringOption((o) => o.setName('sujet').setDescription('Sujet du salon texte').setMaxLength(1024)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('supprimer')
+          .setDescription('Supprimer un salon ou une catégorie après confirmation')
+          .addChannelOption((o) => o.setName('salon').setDescription('Salon ou catégorie').setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildVoice, ChannelType.GuildCategory))
+          .addStringOption((o) => o.setName('confirmation').setDescription('Phrase affichée à la première étape')),
+      ),
+
+    new SlashCommandBuilder()
+      .setName('salons')
+      .setDescription('Outils de maintenance des salons')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addSubcommand((s) =>
+        s
+          .setName('tout-supprimer')
+          .setDescription('Supprimer tous les salons et catégories — action irréversible')
+          .addStringOption((o) => o.setName('confirmation').setDescription('Phrase SUPPRIMER-xxxx affichée lors de l’aperçu')),
+      ),
+
+    new SlashCommandBuilder()
+      .setName('slowmode')
+      .setDescription('Régler le délai entre les messages d’un salon')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+      .addIntegerOption((o) => o.setName('secondes').setDescription('0 désactive le slowmode').setRequired(true).setMinValue(0).setMaxValue(21600))
+      .addChannelOption((o) => o.setName('salon').setDescription('Défaut : salon courant').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
 
     new SlashCommandBuilder()
       .setName('vocal')
@@ -222,18 +302,22 @@ export async function registerCommands(client: Client): Promise<void> {
 //  Exécution
 // ------------------------------------------------------------
 
-function isAdmin(interaction: ChatInputCommandInteraction): boolean {
+function isAdmin(interaction: ChatInputCommandInteraction | ModalSubmitInteraction): boolean {
   if (isOwner(interaction.user.id)) return true;
   const allow = (process.env.ADMIN_DISCORD_IDS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
   if (allow.includes(interaction.user.id)) return true;
-  const member = interaction.member as GuildMember | null;
   return Boolean(
-    member?.permissions?.has(PermissionFlagsBits.ManageGuild) ||
-      member?.permissions?.has(PermissionFlagsBits.Administrator),
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
+      interaction.memberPermissions?.has(PermissionFlagsBits.Administrator),
   );
+}
+
+function canManageChannels(interaction: ChatInputCommandInteraction): boolean {
+  if (isAdmin(interaction)) return true;
+  return Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels));
 }
 
 export function summarizeReport(report: Awaited<ReturnType<typeof applyBlueprint>>): EmbedBuilder {
@@ -248,7 +332,7 @@ export function summarizeReport(report: Awaited<ReturnType<typeof applyBlueprint
     .setAuthor({ name: report.dryRun ? '🧪 Simulation du blueprint' : '✅ Blueprint appliqué' })
     .setDescription(
       [
-        `🟢 **${report.totals.created}** créé(s) · 🔵 **${report.totals.updated}** mis à jour · ⚪ **${report.totals.ok}** déjà conforme(s)`,
+        `🟢 **${report.totals.created}** créé(s) · 🔵 **${report.totals.updated}** à aligner/mis à jour · ⚪ **${report.totals.ok}** conforme(s) · ⏭️ **${report.totals.skipped}** ignoré(s)`,
         errors.length ? `🔴 **${errors.length}** erreur(s)` : '',
         lines.length ? `\n${lines.join('\n')}` : '',
       ]
@@ -292,6 +376,48 @@ async function requireOwnedRoom(interaction: ChatInputCommandInteraction): Promi
   const allowed = room.ownerId === interaction.user.id || isAdmin(interaction);
   if (!allowed) return { ok: false, message: 'Seul le propriétaire du salon peut faire ça 👑' };
   return { ok: true, channel, isOwnerOrAdmin: true };
+}
+
+function modalInput(
+  id: string,
+  label: string,
+  style: TextInputStyle,
+  options: { value?: string; required?: boolean; maxLength?: number },
+): ActionRowBuilder<TextInputBuilder> {
+  const input = new TextInputBuilder()
+    .setCustomId(id)
+    .setLabel(label)
+    .setStyle(style)
+    .setRequired(options.required ?? false)
+    .setMaxLength(options.maxLength ?? 4000);
+  if (options.value) input.setValue(options.value.slice(0, options.maxLength ?? 4000));
+  return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+}
+
+function embedModal(
+  customId: string,
+  template?: { name?: string; title?: string; description?: string; color?: string; footer?: string },
+): ModalBuilder {
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(template ? 'Modifier le modèle d’embed' : 'Créer un embed personnalisé');
+  modal.addComponents(
+    modalInput('name', 'Nom du modèle', TextInputStyle.Short, { value: template?.name ?? 'Nouveau modèle', required: true, maxLength: 64 }),
+    modalInput('title', 'Titre de l’embed', TextInputStyle.Short, { value: template?.title, maxLength: 256 }),
+    modalInput('description', 'Texte principal', TextInputStyle.Paragraph, { value: template?.description, maxLength: 4000 }),
+    modalInput('color', 'Couleur hexadécimale (#RRGGBB)', TextInputStyle.Short, { value: template?.color ?? '#FFFFFF', required: true, maxLength: 7 }),
+    modalInput('footer', 'Pied de page (facultatif)', TextInputStyle.Short, { value: template?.footer, maxLength: 2048 }),
+  );
+  return modal;
+}
+
+function rulesModal(template?: { title?: string; description?: string; color?: string; footer?: string }): ModalBuilder {
+  const modal = new ModalBuilder().setCustomId('rules:create').setTitle('Créer le règlement du serveur');
+  modal.addComponents(
+    modalInput('title', 'Titre', TextInputStyle.Short, { value: template?.title ?? 'Règlement du serveur', required: true, maxLength: 256 }),
+    modalInput('description', 'Règles (texte principal)', TextInputStyle.Paragraph, { value: template?.description, required: true, maxLength: 4000 }),
+    modalInput('color', 'Couleur hexadécimale (#RRGGBB)', TextInputStyle.Short, { value: template?.color ?? '#C9B8FF', required: true, maxLength: 7 }),
+    modalInput('footer', 'Pied de page (facultatif)', TextInputStyle.Short, { value: template?.footer ?? 'Merci de préserver une communauté bienveillante.', maxLength: 2048 }),
+  );
+  return modal;
 }
 
 export async function handleChatInput(
@@ -346,14 +472,75 @@ export async function handleChatInput(
             outdated.length ? `🟠 **${outdated.length}** à mettre à jour` : '',
             '',
             missing.length
-              ? `**Manquants :**\n${missing.slice(0, 15).map((m) => `• ${m.expected}`).join('\n')}\n\nLance \`/setup\` pour tout créer.`
-              : 'La structure est complète ✨',
+              ? `**Manquants :**\n${missing.slice(0, 10).map((item) => `• ${item.expected}`).join('\n')}`
+              : '',
+            outdated.length
+              ? `**À aligner :**\n${outdated.slice(0, 10).map((item) => `• ${item.actual ?? '—'} → ${item.expected}`).join('\n')}`
+              : '',
+            missing.length || outdated.length ? '\nLance /setup pour réparer.' : 'La structure est complète ✨',
           ]
             .filter(Boolean)
             .join('\n'),
         )
         .setTimestamp();
       await interaction.editReply({ embeds: [embed] });
+      return;
+    }
+
+    // ---------------- création et maintenance des embeds ----------------
+    case 'embed': {
+      if (!guild || !isAdmin(interaction)) {
+        await interaction.reply({ content: 'Réservé aux administrateurs du serveur.', ...ephem });
+        return;
+      }
+      const subcommand = interaction.options.getSubcommand();
+      const state = await getState();
+      if (subcommand === 'creer') {
+        const channel = interaction.options.getChannel('salon');
+        await interaction.showModal(embedModal(`embed:create:${channel?.id ?? 'none'}`));
+        return;
+      }
+      if (subcommand === 'liste') {
+        const templates = state.embeds.slice(0, 20);
+        const description = templates.length
+          ? templates.map((template) => `• **${template.name}** · \`${template.id.slice(0, 8)}\` · ${template.channelId ? `<#${template.channelId}>` : 'brouillon'}`).join('\n')
+          : 'Aucun modèle enregistré. Lance `/embed creer` ou utilise le panel web.';
+        await interaction.reply({
+          embeds: [new EmbedBuilder().setColor(0xc9b8ff).setTitle('🪄 Modèles d’embed').setDescription(description).setFooter({ text: 'Gère aussi tes modèles sur le panel web' })],
+          ...ephem,
+        });
+        return;
+      }
+
+      const reference = interaction.options.getString('id', true);
+      const template = await findEmbedTemplate(reference);
+      if (!template) {
+        await interaction.reply({ content: 'Modèle introuvable ou ID ambigu. Utilise `/embed liste`.', ...ephem });
+        return;
+      }
+      if (subcommand === 'modifier') {
+        await interaction.showModal(embedModal(`embed:edit:${template.id}`, template));
+        return;
+      }
+      if (subcommand === 'supprimer') {
+        await removeEmbedTemplate(template.id, `discord:${interaction.user.tag}`);
+        await interaction.reply({ content: `🗑️ Modèle **${template.name}** supprimé.`, ...ephem });
+        return;
+      }
+      const channel = interaction.options.getChannel('salon');
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const result = await publishEmbed(guild, template, channel?.id, `discord:${interaction.user.tag}`);
+      await interaction.editReply({ content: result.message ?? (result.ok ? '✅ Embed publié.' : '❌ Publication impossible.') });
+      return;
+    }
+
+    case 'regles': {
+      if (!guild || !isAdmin(interaction)) {
+        await interaction.reply({ content: 'Réservé aux administrateurs du serveur.', ...ephem });
+        return;
+      }
+      const current = (await getState()).embeds.find((template) => template.name.toLocaleLowerCase() === 'règlement');
+      await interaction.showModal(rulesModal(current));
       return;
     }
 
@@ -481,9 +668,131 @@ export async function handleChatInput(
       return;
     }
 
+    // ---------------- salons : création, suppression protégée, slowmode ----------------
+    case 'salon': {
+      if (!guild || !canManageChannels(interaction)) {
+        await interaction.reply({ content: 'Cette commande demande la permission Gérer les salons.', ...ephem });
+        return;
+      }
+      const subcommand = interaction.options.getSubcommand();
+      if (subcommand === 'creer') {
+        const name = interaction.options.getString('nom', true).trim();
+        const kind = interaction.options.getString('type', true);
+        const chosenCategory = interaction.options.getChannel('categorie');
+        const topic = interaction.options.getString('sujet')?.trim();
+        if (!name || name.length > 100) {
+          await interaction.reply({ content: 'Le nom doit contenir de 1 à 100 caractères.', ...ephem });
+          return;
+        }
+        if (chosenCategory && chosenCategory.type !== ChannelType.GuildCategory) {
+          await interaction.reply({ content: 'La catégorie choisie est invalide.', ...ephem });
+          return;
+        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        try {
+          const channel = await guild.channels.create({
+            name,
+            type: kind === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
+            ...(chosenCategory ? { parent: chosenCategory.id } : {}),
+            ...(kind === 'text' && topic ? { topic } : {}),
+            reason: `Limerence Bot — créé par ${interaction.user.tag}`,
+          });
+          await addLog({ level: 'success', source: `discord:${interaction.user.tag}`, action: 'Salon créé', detail: `${channel.name} (${channel.id})` });
+          await interaction.editReply({ content: `✅ Salon créé : <#${channel.id}>.` });
+        } catch (error) {
+          await interaction.editReply({ content: `❌ Création impossible : ${(error as Error).message}` });
+        }
+        return;
+      }
+
+      const target = interaction.options.getChannel('salon') as GuildBasedChannel | null;
+      if (!target) {
+        await interaction.reply({ content: 'Salon introuvable.', ...ephem });
+        return;
+      }
+      const required = channelDeletionPhrase(target.id);
+      const confirmation = interaction.options.getString('confirmation')?.trim();
+      if (confirmation !== required) {
+        await interaction.reply({
+          content: `⚠️ ${confirmation ? 'Confirmation incorrecte.' : 'Aucune suppression effectuée.'} Pour supprimer **${target.name}**, relance la commande avec la confirmation **${required}**. Les salons contenus dans une catégorie ne sont pas supprimés avec elle.`,
+          ...ephem,
+        });
+        return;
+      }
+      try {
+        await target.delete(`Limerence Bot — suppression demandée par ${interaction.user.tag}`);
+        await addLog({ level: 'warn', source: `discord:${interaction.user.tag}`, action: 'Salon supprimé', detail: `${target.name} (${target.id})` });
+        await interaction.reply({ content: `🗑️ **${target.name}** supprimé.`, ...ephem });
+      } catch (error) {
+        await interaction.reply({ content: `❌ Suppression impossible : ${(error as Error).message}`, ...ephem });
+      }
+      return;
+    }
+
+    case 'salons': {
+      if (!guild || !isAdmin(interaction)) {
+        await interaction.reply({ content: 'La suppression d’urgence est réservée aux administrateurs du serveur.', ...ephem });
+        return;
+      }
+      await guild.channels.fetch().catch(() => undefined);
+      const confirmation = interaction.options.getString('confirmation')?.trim();
+      const required = channelDeletionPhrase(guild.id);
+      if (confirmation !== required) {
+        await interaction.reply({
+          content: `🚨 Cette opération supprimera **tous les ${guild.channels.cache.size} salons et catégories** du serveur. Les messages hébergés dans ces salons seront perdus. Aucune action n’a été faite. Pour confirmer, relance avec la confirmation **${required}**. Après, tu pourras relancer /setup.`,
+          ...ephem,
+        });
+        return;
+      }
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      try {
+        const result = await deleteAllGuildChannels(guild, `discord:${interaction.user.tag}`);
+        const errors = result.failed.slice(0, 5).map((failure) => `#${failure.name}: ${failure.reason}`).join(' · ');
+        await interaction.editReply({
+          content: `🧹 **${result.deleted}/${result.initialCount}** salon(s) supprimé(s).${result.failed.length ? ` ${result.failed.length} échec(s) : ${errors}` : ' Relance /setup pour reconstruire le blueprint.'}`,
+        });
+      } catch (error) {
+        await interaction.editReply({ content: `❌ Opération impossible : ${(error as Error).message}` });
+      }
+      return;
+    }
+
+    case 'slowmode': {
+      if (!guild || !canManageChannels(interaction)) {
+        await interaction.reply({ content: 'Cette commande demande la permission Gérer les salons.', ...ephem });
+        return;
+      }
+      const selected = interaction.options.getChannel('salon') as BaseGuildTextChannel | null;
+      const contextChannel = interaction.channel;
+      const target = selected ?? (
+        contextChannel &&
+        (contextChannel.type === ChannelType.GuildText || contextChannel.type === ChannelType.GuildAnnouncement)
+          ? contextChannel as BaseGuildTextChannel
+          : null
+      );
+      if (!target || (target.type !== ChannelType.GuildText && target.type !== ChannelType.GuildAnnouncement)) {
+        await interaction.reply({ content: 'Choisis un salon textuel valide.', ...ephem });
+        return;
+      }
+      const seconds = interaction.options.getInteger('secondes', true);
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      try {
+        const value = await setSlowmode(target, seconds, `discord:${interaction.user.tag}`);
+        await interaction.editReply({ content: value ? `⏳ Slowmode réglé à **${value}s** dans <#${target.id}>.` : `⏳ Slowmode désactivé dans <#${target.id}>.` });
+      } catch (error) {
+        await interaction.editReply({ content: `❌ Impossible de modifier le slowmode : ${(error as Error).message}` });
+      }
+      return;
+    }
+
     // ---------------- modération ----------------
     case 'purge': {
-      if (!isAdmin(interaction) || !interaction.channel?.isTextBased()) {
+      const purgeChannel = interaction.channel;
+      if (
+        !isAdmin(interaction) ||
+        !purgeChannel ||
+        (purgeChannel.type !== ChannelType.GuildText && purgeChannel.type !== ChannelType.GuildAnnouncement)
+      ) {
         await interaction.reply({ content: 'Réservé aux administrateurs, dans un salon textuel.', ...ephem });
         return;
       }
@@ -491,7 +800,7 @@ export async function handleChatInput(
       const count = interaction.options.getInteger('nombre', true);
       const author = interaction.options.getUser('membre');
       const deleted = await purgeMessages(
-        interaction.channel as TextChannel,
+        purgeChannel as BaseGuildTextChannel,
         count,
         author?.id,
         `discord:${interaction.user.tag}`,
@@ -502,10 +811,15 @@ export async function handleChatInput(
 
     case 'lock':
     case 'unlock': {
-      const target =
-        (interaction.options.getChannel('salon') as TextChannel | null) ??
-        (interaction.channel?.isTextBased() ? (interaction.channel as TextChannel) : null);
-      if (!target || !isAdmin(interaction)) {
+      const selected = interaction.options.getChannel('salon') as BaseGuildTextChannel | null;
+      const contextChannel = interaction.channel;
+      const target = selected ?? (
+        contextChannel &&
+        (contextChannel.type === ChannelType.GuildText || contextChannel.type === ChannelType.GuildAnnouncement)
+          ? contextChannel as BaseGuildTextChannel
+          : null
+      );
+      if (!target || (target.type !== ChannelType.GuildText && target.type !== ChannelType.GuildAnnouncement) || !canManageChannels(interaction)) {
         await interaction.reply({ content: 'Salon ou permissions invalides.', ...ephem });
         return;
       }
@@ -558,8 +872,9 @@ export async function handleChatInput(
           await ephemReply('Ce salon n’est pas un salon temporaire.');
           return;
         }
-        if (channel.members.size === 0 && room.ownerId !== interaction.user.id && !isAdmin(interaction)) {
-          await ephemReply('Ce salon appartient à quelqu’un d’autre.');
+        const previousOwnerPresent = channel.members.has(room.ownerId);
+        if (room.ownerId !== interaction.user.id && previousOwnerPresent && !isAdmin(interaction)) {
+          await ephemReply('Le propriétaire est toujours dans le salon ; seul un admin peut le reprendre.');
           return;
         }
         await transferOwnership(guild, channel, interaction.user.id);
@@ -647,6 +962,95 @@ export async function handleChatInput(
     default:
       await interaction.reply({ content: 'Commande inconnue.', ...ephem });
   }
+}
+
+export async function handleEmbedModalSubmit(
+  interaction: ModalSubmitInteraction,
+  config: AppConfig,
+): Promise<boolean> {
+  const isRules = interaction.customId === 'rules:create';
+  const [scope, action, targetId] = interaction.customId.split(':');
+  if (!isRules && scope !== 'embed') return false;
+  if (!interaction.guild || !isAdmin(interaction)) {
+    await interaction.reply({ content: 'Réservé aux administrateurs du serveur.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const guild = interaction.guild;
+  const title = interaction.fields.getTextInputValue('title').trim();
+  const description = interaction.fields.getTextInputValue('description').trim();
+  const color = interaction.fields.getTextInputValue('color').trim();
+  const footer = interaction.fields.getTextInputValue('footer').trim();
+
+  if (isRules) {
+    const existing = (await getState()).embeds.find((template) => template.name.toLocaleLowerCase() === 'règlement');
+    const rulesChannel = await resolveChannelSafe(guild, config, 'rules');
+    const channelId = rulesChannel?.type === ChannelType.GuildText || rulesChannel?.type === ChannelType.GuildAnnouncement
+      ? rulesChannel.id
+      : undefined;
+    const input = {
+      name: 'Règlement',
+      title,
+      description,
+      color,
+      footer,
+      channelId: channelId ?? '',
+    };
+    const saved = existing
+      ? await updateEmbedTemplate(existing.id, input, `discord:${interaction.user.tag}`)
+      : await createEmbedTemplate(input, `discord:${interaction.user.tag}`);
+    if (!saved.ok || !saved.template) {
+      await interaction.editReply({ content: `❌ ${saved.message ?? 'Enregistrement impossible.'}` });
+      return true;
+    }
+    if (!channelId) {
+      await interaction.editReply({ content: '✅ Règlement enregistré en brouillon. Le salon règles est introuvable : lance /setup, puis publie le modèle depuis /embed publier.' });
+      return true;
+    }
+    const published = await publishEmbed(guild, saved.template, channelId, `discord:${interaction.user.tag}`);
+    await interaction.editReply({ content: published.message ?? 'Règlement enregistré.' });
+    return true;
+  }
+
+  if (action === 'create') {
+    const name = interaction.fields.getTextInputValue('name').trim();
+    const channelId = targetId && targetId !== 'none' ? targetId : undefined;
+    const saved = await createEmbedTemplate(
+      { name, title, description, color, footer, ...(channelId ? { channelId } : {}) },
+      `discord:${interaction.user.tag}`,
+    );
+    if (!saved.ok || !saved.template) {
+      await interaction.editReply({ content: `❌ ${saved.message ?? 'Enregistrement impossible.'}` });
+      return true;
+    }
+    if (!channelId) {
+      await interaction.editReply({ content: `✅ Modèle **${saved.template.name}** enregistré. Publie-le ensuite avec /embed publier.` });
+      return true;
+    }
+    const published = await publishEmbed(guild, saved.template, channelId, `discord:${interaction.user.tag}`);
+    await interaction.editReply({ content: published.message ?? 'Modèle enregistré.' });
+    return true;
+  }
+
+  if (action === 'edit') {
+    const name = interaction.fields.getTextInputValue('name').trim();
+    const existing = (await getState()).embeds.find((template) => template.id === targetId);
+    if (!existing) {
+      await interaction.editReply({ content: '❌ Modèle introuvable.' });
+      return true;
+    }
+    const updated = await updateEmbedTemplate(
+      targetId,
+      { name, title, description, color, footer, fields: existing.fields },
+      `discord:${interaction.user.tag}`,
+    );
+    await interaction.editReply({ content: updated.ok ? `✅ Modèle **${updated.template?.name}** modifié. Les liens, images et champs avancés sont conservés.` : `❌ ${updated.message ?? 'Modification impossible.'}` });
+    return true;
+  }
+
+  await interaction.editReply({ content: 'Sous-commande embed inconnue.' });
+  return true;
 }
 
 export { parseSchedule };

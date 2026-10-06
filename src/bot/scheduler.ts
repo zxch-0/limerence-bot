@@ -11,11 +11,12 @@ import { reconcileTempRooms } from './tempRooms';
 interface SchedulerGlobals {
   timers: NodeJS.Timeout[];
   running: boolean;
+  ticking: boolean;
 }
 
 const g: SchedulerGlobals = ((globalThis as typeof globalThis & {
   __limerenceScheduler?: SchedulerGlobals;
-}).__limerenceScheduler ??= { timers: [], running: false });
+}).__limerenceScheduler ??= { timers: [], running: false, ticking: false });
 
 const TICK_MS = 30_000;
 
@@ -24,6 +25,8 @@ export function startScheduler(client: Client): void {
   g.running = true;
 
   const tick = async () => {
+    if (g.ticking) return;
+    g.ticking = true;
     try {
       if (!client.isReady()) return;
       const guild = await getGuild(false);
@@ -38,6 +41,8 @@ export function startScheduler(client: Client): void {
       }
     } catch (err) {
       console.error('[scheduler] erreur :', (err as Error).message);
+    } finally {
+      g.ticking = false;
     }
   };
 
