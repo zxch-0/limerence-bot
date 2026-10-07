@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { ChannelType, PermissionFlagsBits } from 'discord.js';
+import { CHANNEL_SLOTS } from '../src/lib/types';
 import {
   buildCommands,
   COMMAND_COUNT,
@@ -105,6 +107,7 @@ test('la surface de commandes couvre l’économie, le blackjack, la boutique et
     'regles',
     'vocal',
     'ping',
+    'config',
   ]) {
     assert.ok(names.includes(expected), `commande manquante : /${expected}`);
   }
@@ -132,4 +135,20 @@ test('le module de commandes n’importe pas Next.js', () => {
   const source = readFileSync(path.join(process.cwd(), 'src/bot/commandDefs.ts'), 'utf8');
   assert.equal(/from ['"]next/.test(source), false, 'commandDefs.ts doit rester indépendant de Next.js');
   assert.equal(/from ['"]@\/app/.test(source), false, 'aucune dépendance au panel');
+});
+
+ test('/config expose tous les salons, exige Gérer le serveur et refuse les MP', () => {
+  const config = buildCommands().find((command) => command.name === 'config')!.toJSON();
+  assert.equal(config.default_member_permissions, PermissionFlagsBits.ManageGuild.toString());
+  assert.equal(config.dm_permission, false);
+  const subs = config.options as Array<{ name: string; options?: Array<{ name: string; required?: boolean; choices?: Array<{ value: string }>; channel_types?: number[] }> }>;
+  assert.deepEqual(subs.map((sub) => sub.name), ['voir', 'salon', 'supprimer']);
+  for (const sub of subs.slice(1)) {
+    const category = sub.options!.find((option) => option.name === 'categorie')!;
+    assert.equal(category.required, true);
+    assert.deepEqual(category.choices!.map((choice) => choice.value), [...CHANNEL_SLOTS]);
+  }
+  const channel = subs[1].options!.find((option) => option.name === 'salon')!;
+  assert.equal(channel.required, true);
+  assert.deepEqual(channel.channel_types, [ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 });

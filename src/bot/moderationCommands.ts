@@ -526,6 +526,7 @@ export function helpEmbed(): EmbedBuilder {
     ['🛒 Boutique', '`/shop liste` `/shop acheter` `/shop vitrine`'],
     ['🛡️ Modération', '`/warn` `/cas` `/kick` `/ban` `/unban` `/softban` `/mute` `/unmute` `/nick` `/purge` `/lock` `/unlock` `/lockdown` `/unlockdown` `/slowmode` `/nuke` `/addrole` `/removerole` `/banlist` `/antiraid`'],
     ['🔎 Informations', '`/userinfo` `/serverinfo` `/roleinfo` `/aide` `/ping`'],
+    ['⚙️ Configuration', '`/config voir` `/config salon` `/config supprimer`'],
     ['✨ Animation', '`/confession` `/annonce` `/annonces` `/embed` `/regles` `/vocal` `/panel`'],
   ];
   return new EmbedBuilder()

@@ -16,6 +16,7 @@ import {
   isJailed,
 } from '../lib/economy/core';
 import { effectivePrice, sortedItems } from '../lib/shop/items';
+import { COMMAND_COUNT } from './commandDefs';
 import { getStats } from '../lib/blackjack/table';
 import { activeWarns } from '../lib/moderation/cases';
 import {
@@ -598,7 +599,7 @@ export function infoCard(state: StoreState, config: AppConfig, ctx: UiContext): 
       name: '✦ Bot',
       value: [
         `**Uptime :** ${shortDuration(process.uptime())}`,
-        `**Commandes :** 48`,
+        `**Commandes :** ${COMMAND_COUNT}`,
         `**Salons non associés :** ${missing}`,
         `**Journal :** ${state.logs.length} entrée(s)`,
       ].join('\n'),

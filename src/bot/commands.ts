@@ -31,6 +31,7 @@ import { handleBlackjackCommand } from './blackjack';
 import { accentColor, uiView } from './ui';
 import { handleShopCommand } from './shop';
 import { handleModerationCommand } from './moderationCommands';
+import { handleConfigCommand } from './config';
 import {
   allowMember,
   deleteRoom,
@@ -79,6 +80,11 @@ export async function handleChatInput(
   config: AppConfig,
 ): Promise<void> {
   const name = interaction.commandName;
+
+  if (name === 'config') {
+    await handleConfigCommand(interaction);
+    return;
+  }
 
   // ---- économie / jeux / boutique ----
   if (
