@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { logoutAction } from '@/app/(panel)/actions';
+import { logoutAction } from '@/app/(panel)/actions/config';
 
 export interface NavItem {
   href: string;
@@ -12,23 +12,32 @@ export interface NavItem {
   badge?: number;
 }
 
+export interface NavGroup {
+  id: string;
+  label: string;
+  items: NavItem[];
+}
+
 export function Sidebar({
-  items,
+  groups,
   user,
   bot,
 }: {
-  items: NavItem[];
+  groups: NavGroup[];
   user: { name: string; avatarUrl: string | null };
   bot: { connected: boolean; demo: boolean; tag: string | null };
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const isActive = (href: string) =>
+    href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         className="btn btn-ghost fixed left-4 top-4 z-40 lg:hidden"
         aria-label="Menu"
       >
@@ -46,35 +55,43 @@ export function Sidebar({
           </div>
           <div>
             <p className="text-sm font-semibold text-white">Limerence</p>
-            <p className="text-xs text-white/40">Panel d’administration</p>
+            <p className="text-xs text-white/40">Économie · jeux · modération</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-          {items.map((item) => {
-            const active =
-              item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
-                  active
-                    ? 'bg-lilac/15 text-white ring-1 ring-lilac/25'
-                    : 'text-white/60 hover:bg-white/5 hover:text-white/90'
-                }`}
-              >
-                <span className="w-5 text-center">{item.emoji}</span>
-                <span className="flex-1">{item.label}</span>
-                {item.badge ? (
-                  <span className="rounded-full bg-blush/20 px-2 py-0.5 text-[11px] text-blush">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+          {groups.map((group) => (
+            <div key={group.id}>
+              <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-white/30">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+                        active
+                          ? 'bg-lilac/15 text-white ring-1 ring-lilac/25'
+                          : 'text-white/60 hover:bg-white/5 hover:text-white/90'
+                      }`}
+                    >
+                      <span className="w-5 text-center">{item.emoji}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge ? (
+                        <span className="rounded-full bg-blush/20 px-2 py-0.5 text-[11px] text-blush">
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-line p-4">

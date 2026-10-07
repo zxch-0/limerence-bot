@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getState, updateState } from './store';
-import { findChannel } from './config';
+import { resolveSlotChannel } from './channels';
 import type { LogEntry, LogLevel } from './types';
 
 // ============================================================
@@ -25,18 +25,11 @@ export async function addLog(input: AddLogInput): Promise<LogEntry> {
     detail: input.detail,
   };
 
-  const keep = await updateState((state) => {
-    if (!state.config.logs.keepInPanel) {
-      state.logs.unshift(entry);
-      state.logs = state.logs.slice(0, 50);
-      return false;
-    }
+  await updateState((state) => {
     state.logs.unshift(entry);
     const max = Math.max(50, state.config.logs.maxEntries || 500);
     state.logs = state.logs.slice(0, max);
-    return true;
   });
-  void keep;
 
   // miroir Discord (best effort, jamais bloquant)
   if (process.env.LIMERENCE_NO_MIRROR !== '1') {
@@ -45,11 +38,19 @@ export async function addLog(input: AddLogInput): Promise<LogEntry> {
   return entry;
 }
 
+const ICONS: Record<LogLevel, string> = {
+  info: 'ℹ️',
+  success: '✅',
+  warn: '⚠️',
+  error: '⛔',
+  moderation: '🔨',
+  economy: '💰',
+};
+
 async function mirrorToDiscord(entry: LogEntry): Promise<void> {
   const state = await getState();
   if (!state.config.logs.enabled) return;
-  const channel = findChannel(state.config, state.config.logs.channelKey);
-  if (!channel) return;
+  if (!state.config.logs.channelId) return;
 
   const { getReadyClient } = await import('./discord/client');
   const client = getReadyClient();
@@ -59,20 +60,12 @@ async function mirrorToDiscord(entry: LogEntry): Promise<void> {
   if (!guildId) return;
   const guild = await client.guilds.fetch(guildId).catch(() => null);
   if (!guild) return;
-  const { resolveChannel } = await import('./blueprint');
-  const discordChannel = await resolveChannel(guild, state.config, channel.key);
-  if (!discordChannel?.isTextBased()) return;
 
-  const icons: Record<LogLevel, string> = {
-    info: 'ℹ️',
-    success: '✅',
-    warn: '⚠️',
-    error: '⛔',
-    moderation: '🔨',
-  };
+  const channel = await resolveSlotChannel(guild, state.config, 'logs');
+  if (!channel) return;
 
-  await discordChannel.send({
-    content: `${icons[entry.level]} **${entry.action}**${entry.detail ? `\n> ${entry.detail.replace(/\n/g, '\n> ')}` : ''}\n\`${entry.source}\` · <t:${Math.floor(Date.now() / 1000)}:R>`,
+  await channel.send({
+    content: `${ICONS[entry.level]} **${entry.action}**${entry.detail ? `\n> ${entry.detail.replace(/\n/g, '\n> ')}` : ''}\n\`${entry.source}\` · <t:${Math.floor(Date.now() / 1000)}:R>`,
     allowedMentions: { parse: [] },
   });
 }

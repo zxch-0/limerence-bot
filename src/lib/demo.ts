@@ -6,36 +6,6 @@ import { ChannelType, type Guild } from 'discord.js';
 //  déploiement) pour que le panel reste lisible et navigable.
 // ============================================================
 
-const NAMES = [
-  'luna', 'nox', 'ambre', 'kael', 'yuna', 'sacha', 'iris', 'ren',
-  'milo', 'noée', 'eden', 'lyra', 'soren', 'maé', 'zoe', 'axel',
-];
-
-export interface DemoMember {
-  id: string;
-  tag: string;
-  displayName: string;
-  avatarUrl: string | null;
-  joinedAt: string;
-  roles: number;
-  isBot: boolean;
-}
-
-export function demoMembers(count = 12): DemoMember[] {
-  return Array.from({ length: count }, (_, i) => {
-    const name = NAMES[i % NAMES.length];
-    return {
-      id: String(100000000000000000n + BigInt(i)),
-      tag: `${name}#${1000 + i}`,
-      displayName: name,
-      avatarUrl: null,
-      joinedAt: new Date(Date.now() - (i + 1) * 86_400_000 * 3).toISOString(),
-      roles: i % 3 === 0 ? 2 : 1,
-      isBot: false,
-    };
-  });
-}
-
 export interface DemoGuild {
   id: string;
   name: string;
@@ -123,12 +93,35 @@ export function channelOptionsFromGuild(guild: Guild): ChannelOption[] {
     .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 }
 
+/** Rôles du serveur, utilisés par les sélecteurs du panel. */
+export interface RoleOption {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export function roleOptionsFromGuild(guild: Guild): RoleOption[] {
+  return guild.roles.cache
+    .filter((role) => role.id !== guild.id)
+    .map((role) => ({ id: role.id, name: role.name, position: role.position }))
+    .sort((a, b) => b.position - a.position || a.name.localeCompare(b.name, 'fr'));
+}
+
+export function demoRoleOptions(): RoleOption[] {
+  return [
+    { id: '10', name: 'Administrateur', position: 9 },
+    { id: '11', name: 'Modérateur', position: 8 },
+    { id: '12', name: 'Membre', position: 1 },
+  ];
+}
+
 export function demoChannelOptions(): ChannelOption[] {
   return [
-    { id: '1', name: '💬 accueil', type: 'category' },
-    { id: '2', name: '➥ chat 💬', type: 'text', parentName: '💬 accueil' },
-    { id: '3', name: '➥ confessions 🤫', type: 'text', parentName: '💬 accueil' },
-    { id: '4', name: '➥ photos 📸', type: 'text', parentName: '💬 accueil' },
-    { id: '5', name: '🔊 Vocal général', type: 'voice', parentName: '🌍 public' },
+    { id: '1', name: 'général', type: 'category' },
+    { id: '2', name: 'accueil', type: 'text', parentName: 'général' },
+    { id: '3', name: 'discussion', type: 'text', parentName: 'général' },
+    { id: '4', name: 'annonces', type: 'text', parentName: 'général' },
+    { id: '5', name: 'règlement', type: 'text', parentName: 'général' },
+    { id: '6', name: 'vocal général', type: 'voice', parentName: 'général' },
   ];
 }

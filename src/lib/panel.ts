@@ -1,7 +1,17 @@
 import type { Guild } from 'discord.js';
 import { getGuild, botStatus } from './discord/client';
 import { getState } from './store';
-import { channelOptionsFromGuild, demoChannelOptions, demoGuildInfo, guildInfoFromGuild, type ChannelOption, type GuildInfo } from './demo';
+import {
+  channelOptionsFromGuild,
+  demoChannelOptions,
+  demoGuildInfo,
+  demoRoleOptions,
+  guildInfoFromGuild,
+  roleOptionsFromGuild,
+  type ChannelOption,
+  type GuildInfo,
+  type RoleOption,
+} from './demo';
 import type { AppConfig, StoreState } from './types';
 
 // ============================================================
@@ -15,6 +25,7 @@ export interface PanelContext {
   guild: Guild | null;
   info: GuildInfo;
   channels: ChannelOption[];
+  roles: RoleOption[];
   /** true si aucune donnée réelle n'est disponible (bot hors ligne) */
   demo: boolean;
 }
@@ -42,6 +53,7 @@ export async function getContext(): Promise<PanelContext> {
     guild,
     info: guild ? guildInfoFromGuild(guild) : demoGuildInfo(),
     channels: guild ? channelOptionsFromGuild(guild) : demoChannelOptions(),
+    roles: guild ? roleOptionsFromGuild(guild) : demoRoleOptions(),
     demo: !guild,
   };
 }

@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Limerence — panel admin',
   description:
-    'Panel d’administration du bot Discord Limerence : blueprint du serveur, confessions anonymes, annonces, modération.',
+    'Panel d’administration du bot Discord Limerence : économie configurable, blackjack, boutique, modération avancée.',
   robots: { index: false, follow: false },
 };
 

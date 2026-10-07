@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { InlineAction } from '@/components/ActionForm';
 import { Card, EmptyState, PageHeader, Pill, relativeDate, shortDate } from '@/components/ui';
 import { getContext } from '@/lib/panel';
-import { clearLogsAction } from '../actions';
+import { clearLogsAction } from '../actions/rooms';
 import type { LogLevel } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +14,7 @@ const LEVELS: Array<{ key: LogLevel | 'all'; label: string }> = [
   { key: 'warn', label: 'Alerte' },
   { key: 'error', label: 'Erreur' },
   { key: 'moderation', label: 'Modération' },
+  { key: 'economy', label: 'Économie' },
 ];
 
 const ICONS: Record<LogLevel, string> = {
@@ -22,6 +23,7 @@ const ICONS: Record<LogLevel, string> = {
   warn: '⚠️',
   error: '⛔',
   moderation: '🔨',
+  economy: '💰',
 };
 
 export default async function LogsPage({
@@ -101,7 +103,9 @@ export default async function LogsPage({
       <p className="mt-4 text-xs text-white/35">
         Conservation : {state.config.logs.maxEntries} entrées maximum ·{' '}
         {state.config.logs.keepInPanel ? 'journal du panel activé' : 'journal du panel désactivé'}
-        {state.config.logs.enabled ? ` · miroir Discord vers « ${state.config.logs.channelKey} »` : ''}
+        {state.config.logs.enabled
+          ? ` · miroir Discord vers ${state.config.logs.channelId ? `le salon ${state.config.logs.channelId}` : 'l’emplacement « Journal »'}`
+          : ''}
       </p>
     </>
   );

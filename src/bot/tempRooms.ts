@@ -13,7 +13,8 @@ import {
 } from 'discord.js';
 import { getState, updateState } from '../lib/store';
 import { addLog } from '../lib/logs';
-import { resolveFromCache } from './resolve';
+import { accentColor } from './ui';
+
 import type { TempRoom } from '../lib/types';
 
 // ============================================================
@@ -25,9 +26,13 @@ import type { TempRoom } from '../lib/types';
 
 const pendingDeletions = new Map<string, NodeJS.Timeout>();
 
-function ownerName(member: GuildMember): string {
+function ownerName(member: GuildMember, template: string): string {
   const base = member.displayName || member.user.username;
-  return `🔊 ${base}`.slice(0, 100);
+  const name = (template || '🔊 {name}')
+    .replaceAll('{name}', base)
+    .replaceAll('{user}', member.user.username)
+    .replaceAll('{display}', base);
+  return name.slice(0, 100);
 }
 
 export async function handleVoiceStateUpdate(
@@ -41,14 +46,17 @@ export async function handleVoiceStateUpdate(
 
   if (!cfg.enabled) return;
 
-  const hub = resolveFromCache(guild, state.config, cfg.hubChannelKey);
-  if (!hub) return;
+  if (!/^\d{15,25}$/.test(cfg.hubChannelId)) return;
+  const hub =
+    guild.channels.cache.get(cfg.hubChannelId) ??
+    (await guild.channels.fetch(cfg.hubChannelId).catch(() => null));
+  if (!hub?.isVoiceBased()) return;
 
   const member = newState.member ?? oldState.member ?? null;
 
   // 1) arrivée dans le hub -> création d'un salon
   if (oldState.channelId !== hub.id && newState.channelId === hub.id && member && !member.user.bot) {
-    await createTempRoom(guild, member, state.config.joinToCreate.hubChannelKey, hub as VoiceChannel);
+    await createTempRoom(guild, member, hub as VoiceChannel);
     return;
   }
 
@@ -62,7 +70,6 @@ export async function handleVoiceStateUpdate(
 async function createTempRoom(
   guild: Guild,
   member: GuildMember,
-  hubKey: string,
   hubChannel: VoiceBasedChannel,
 ): Promise<void> {
   const state = await getState();
@@ -96,16 +103,17 @@ async function createTempRoom(
     }
   }
 
-  const category = state.config.categories.find((c) => c.key === cfg.categoryKey);
-  const parent = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes(category?.slug.toLowerCase() ?? 'priv'),
-  );
+  const parent = /^\d{15,25}$/.test(cfg.categoryId)
+    ? guild.channels.cache.get(cfg.categoryId) ??
+      (await guild.channels.fetch(cfg.categoryId).catch(() => null))
+    : undefined;
+  const parentId = parent?.type === ChannelType.GuildCategory ? parent.id : undefined;
 
   try {
     const channel = await guild.channels.create({
-      name: ownerName(member),
+      name: ownerName(member, cfg.nameTemplate),
       type: ChannelType.GuildVoice,
-      parent: parent?.id,
+      parent: parentId,
       userLimit: cfg.defaultSize > 0 ? cfg.defaultSize : undefined,
       permissionOverwrites: [
         {
@@ -156,32 +164,35 @@ async function createTempRoom(
       level: 'error',
       source: 'bot',
       action: 'Création du salon temporaire échouée',
-      detail: (err as Error).message,
+      detail: `${hubChannel.name} — ${(err as Error).message}`,
     });
-    void hubChannel;
-    void hubKey;
   }
 }
 
 /** Envoie au propriétaire un panneau de contrôle en MP (boutons). */
 async function sendControlPanel(member: GuildMember, channel: VoiceChannel): Promise<void> {
+  const state = await getState();
+  const ui = state.config.ui;
+
   const embed = new EmbedBuilder()
-    .setColor(0xffffff)
-    .setAuthor({ name: '🎛️ Ton salon vocal est prêt' })
+    .setColor(accentColor(ui))
+    .setAuthor({ name: `${ui.accentEmoji} Ton salon vocal est prêt` })
     .setDescription(
       [
         `Salon : **${channel.name}**`,
         '',
-        'Tu peux le gérer depuis ce message ou avec la commande `/vocal` :',
+        'Gère-le **directement depuis ce message privé**, les boutons fonctionnent ici :',
         '• **Renommer** — change le nom du salon',
-        '• **Verrouiller** — plus personne ne peut entrer',
-        '• **Autoriser** — invite une personne précise',
-        '• **Expulser** — éjecte quelqu’un de ton salon',
-        '• **Transférer** — donne le salon à quelqu’un d’autre',
+        '• **Verrouiller / ouvrir** — plus personne ne peut entrer',
+        '• **Limite** — nombre de places',
+        '• **Réclamer** — reprends le salon si le propriétaire est parti',
         '• **Supprimer** — ferme ton salon tout de suite',
+        '',
+        'Le reste se fait avec `/vocal`, utilisable ici aussi :',
+        '`/vocal autoriser` · `/vocal expulser` · `/vocal transferer`',
       ].join('\n'),
     )
-    .setFooter({ text: 'Le salon disparaît automatiquement quand il est vide.' });
+    .setFooter({ text: ui.showFooter ? ui.footerText : 'Le salon disparaît automatiquement quand il est vide.' });
 
   const rows = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(

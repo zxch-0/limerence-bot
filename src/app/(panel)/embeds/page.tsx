@@ -2,16 +2,15 @@ import { ActionForm, InlineAction } from '@/components/ActionForm';
 import { EmbedComposer } from '@/components/EmbedComposer';
 import { Card, EmptyState, Field, PageHeader, Pill } from '@/components/ui';
 import { getContext } from '@/lib/panel';
-import { resolveChannel } from '@/lib/blueprint';
-import { createEmbedAction, deleteEmbedAction, publishEmbedAction, updateEmbedAction } from '../actions';
+import { slotChannelId } from '@/lib/channels';
+import { deleteEmbedAction, publishEmbedAction, saveEmbedAction } from '../actions/content';
 
 export const dynamic = 'force-dynamic';
 
 export default async function EmbedsPage() {
-  const { state, config, channels, guild, demo } = await getContext();
+  const { state, config, channels, demo } = await getContext();
   const textChannels = channels.filter((channel) => channel.type === 'text');
-  const rulesChannel = guild ? await resolveChannel(guild, config, 'rules') : null;
-  const defaultChannelId = rulesChannel?.id ?? '';
+  const defaultChannelId = slotChannelId(config, 'rules');
 
   return (
     <>
@@ -28,7 +27,7 @@ export default async function EmbedsPage() {
 
       <Card title="Créer un embed" subtitle="Aperçu en direct · liens, images, champs et salon de publication">
         <EmbedComposer
-          action={createEmbedAction}
+          action={saveEmbedAction}
           channels={demo ? [] : textChannels}
           defaultChannelId={demo ? '' : defaultChannelId}
         />
@@ -78,7 +77,7 @@ export default async function EmbedsPage() {
 
                 <details className="mt-3 rounded-xl border border-line bg-black/10 p-3">
                   <summary className="cursor-pointer text-xs font-medium text-lilac">Modifier le modèle sur le site</summary>
-                  <ActionForm action={updateEmbedAction} submitLabel="💾 Enregistrer les modifications" className="mt-3 space-y-3">
+                  <ActionForm action={saveEmbedAction} submitLabel="💾 Enregistrer les modifications" className="mt-3 space-y-3">
                     <input type="hidden" name="id" value={template.id} />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Nom du modèle">
@@ -118,8 +117,8 @@ export default async function EmbedsPage() {
         <div className="grid gap-3 text-sm sm:grid-cols-2">
           <Command name="/embed creer" description="Ouvre un formulaire Discord, enregistre un modèle et peut le publier dans le salon choisi." />
           <Command name="/embed liste · publier · modifier · supprimer" description="Gère les modèles enregistrés depuis une commande slash." />
-          <Command name="/regles" description="Crée un règlement avec un formulaire et le publie dans le salon règles du blueprint." />
-          <Command name="/salons tout-supprimer" description="Outil d’urgence protégé par une phrase de confirmation liée à ton serveur." />
+          <Command name="/regles" description="Crée un règlement avec un formulaire et le publie dans le salon « Règlement » choisi dans le panel." />
+          <Command name="/annonce" description="Publie une annonce immédiate ou programmée depuis Discord, comme depuis le panel." />
         </div>
       </Card>
     </>

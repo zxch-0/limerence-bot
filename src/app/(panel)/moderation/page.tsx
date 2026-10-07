@@ -1,138 +1,302 @@
-import { ActionForm } from '@/components/ActionForm';
-import { Card, EmptyState, Field, PageHeader, Pill, relativeDate } from '@/components/ui';
+import Link from 'next/link';
+import { ConfigEditor } from '@/components/ConfigEditor';
+import { ActionForm, InlineAction } from '@/components/ActionForm';
+import { ChannelPicker } from '@/components/ChannelPicker';
+import { RolePicker } from '@/components/RolePicker';
+import { Card, EmptyState, PageHeader, Pill, shortDate } from '@/components/ui';
+import { MODERATION_FIELDS, MODERATION_OPTIONS_COUNT, MODERATION_SECTIONS } from '@/lib/moderation/config';
+import { CASE_TYPE_EMOJI, CASE_TYPE_LABELS, activeWarns } from '@/lib/moderation/cases';
 import { getContext } from '@/lib/panel';
-import { banAction, kickAction, lockAction, purgeAction, slowmodeAction } from '../actions';
+import { sectionViews, valuesOf } from '@/lib/panelViews';
+import {
+  banMemberAction,
+  clearWarnsAction,
+  kickMemberAction,
+  lockChannelAction,
+  manageRoleAction,
+  nicknameAction,
+  nukeChannelAction,
+  pruneCasesAction,
+  purgeAction,
+  revokeCaseAction,
+  slowmodeAction,
+  softbanMemberAction,
+  timeoutMemberAction,
+  unbanMemberAction,
+  untimeoutMemberAction,
+  warnMemberAction,
+} from '../actions/moderation';
+import { resetSectionAction, saveModerationConfigAction } from '../actions/config';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ModerationPage() {
-  const { channels, state, demo } = await getContext();
-  const textChannels = channels.filter((c) => c.type === 'text');
-  const voiceChannels = channels.filter((c) => c.type === 'voice');
-  const modLogs = state.logs.filter((l) => l.level === 'moderation').slice(0, 12);
+export default async function ModerationPage({ searchParams }: { searchParams: Promise<{ membre?: string }> }) {
+  const { membre } = await searchParams;
+  const { state, channels, roles } = await getContext();
+  const config = state.config.moderation;
+  const views = sectionViews(MODERATION_FIELDS, MODERATION_SECTIONS);
+  const userId = (membre ?? '').trim();
+
+  const cases = [...state.cases].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const warns = userId ? activeWarns(state, userId, config) : [];
 
   return (
     <>
       <PageHeader
         title="Modération"
-        description="Outils d’administration du serveur. Chaque action est journalisée dans le panel et dans le salon de logs Discord."
+        description={`${MODERATION_OPTIONS_COUNT} options : avertissements avec MP automatique, sanctions graduées, dossiers et nettoyage de salons.`}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link className="btn btn-ghost" href="/warns">
+              Avertissements
+            </Link>
+            <Link className="btn btn-ghost" href="/automod">
+              Auto-modération
+            </Link>
+            <ActionForm action={pruneCasesAction} submitLabel="Purger les dossiers expirés" className="contents" />
+            <InlineAction
+              action={resetSectionAction}
+              fields={{ section: 'moderation' }}
+              className="btn btn-danger"
+              confirm="Remettre les options de modération aux valeurs par défaut ?"
+            >
+              Valeurs par défaut
+            </InlineAction>
+          </div>
+        }
       />
 
-      {demo ? (
-        <div className="mb-4 rounded-2xl border border-sand/30 bg-sand/10 p-4 text-sm text-sand">
-          Mode démo : les actions nécessitent une connexion réelle du bot.
-        </div>
-      ) : null}
+      <Card title="Cible" subtitle="Identifiant Discord ou mention, utilisé par toutes les actions ci-dessous">
+        <form className="flex flex-wrap gap-2" method="get">
+          <input
+            type="search"
+            name="membre"
+            className="field mono max-w-sm"
+            placeholder="mention ou identifiant du membre"
+            defaultValue={userId}
+          />
+          <button className="btn btn-ghost" type="submit">
+            Sélectionner
+          </button>
+        </form>
+        {userId ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Pill tone="info">cible : {userId}</Pill>
+            <Pill tone={warns.length ? 'warn' : 'ok'}>
+              {warns.length} avertissement(s) actif(s)
+            </Pill>
+            <InlineAction
+              action={clearWarnsAction}
+              fields={{ userId }}
+              className="btn btn-ghost btn-xs"
+              confirm="Effacer tous les avertissements de ce membre ?"
+            >
+              Effacer ses avertissements
+            </InlineAction>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-white/40">
+            Sans cible, les formulaires demandent quand même l’identifiant dans leur propre champ.
+          </p>
+        )}
+      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="🧹 Purge de messages" subtitle="Supprime de 1 à 100 messages d’un salon">
-          <ActionForm action={purgeAction} submitLabel="Supprimer les messages">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Salon">
-                <select className="field" name="channelId" required>
-                  {textChannels.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Nombre (1-100)">
-                <input type="number" min={1} max={100} defaultValue={10} className="field" name="count" />
-              </Field>
-              <Field label="Limiter à un auteur (ID, optionnel)" className="sm:col-span-2">
-                <input className="field mono" name="userId" placeholder="ex. 123456789012345678" />
-              </Field>
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <Card title="Avertir" subtitle={`Dossier + MP automatique${config.warnDirectMessage ? '' : ' (MP désactivé)'}`}>
+          <ActionForm action={warnMemberAction} submitLabel="Avertir" className="space-y-3">
+            <input type="hidden" name="userId" value={userId} />
+            <div>
+              <label className="label">Raison</label>
+              <textarea name="reason" className="field min-h-20" rows={2} placeholder="Rappel du règlement…" />
             </div>
+            <label className="flex items-center gap-2 text-sm text-white/70">
+              <input type="checkbox" name="notifyChannel" defaultChecked className="h-4 w-4 accent-[#c9b8ff]" />
+              Publier dans le salon de modération
+            </label>
           </ActionForm>
+          <p className="mt-3 text-xs text-white/35">
+            Sanction automatique : mute après {config.warnTimeoutThreshold} · kick après{' '}
+            {config.warnKickThreshold} · ban après {config.warnBanThreshold}.
+          </p>
         </Card>
 
-        <Card title="🔒 Verrouiller un salon" subtitle="Coupe l’écriture pour @everyone">
-          <ActionForm action={lockAction} submitLabel="Appliquer">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Salon">
-                <select className="field" name="channelId" required>
-                  {[...textChannels, ...voiceChannels].map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Action">
-                <select className="field" name="mode" defaultValue="lock">
-                  <option value="lock">Verrouiller</option>
-                  <option value="unlock">Déverrouiller</option>
-                </select>
-              </Field>
-            </div>
-          </ActionForm>
+        <Card title="Sanctions" subtitle="Timeout, kick, ban, softban">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ActionForm action={timeoutMemberAction} submitLabel="Mute" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="minutes" type="number" min={1} className="field" defaultValue={config.defaultTimeoutMinutes} aria-label="Minutes" />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+
+            <ActionForm action={untimeoutMemberAction} submitLabel="Unmute" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+
+            <ActionForm action={kickMemberAction} submitLabel="Kick" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+
+            <ActionForm action={banMemberAction} submitLabel="Ban" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="days" type="number" min={0} max={7} className="field" defaultValue={config.banDeleteMessageDays} aria-label="Jours de messages supprimés" />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+
+            <ActionForm action={unbanMemberAction} submitLabel="Débannir" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+
+            <ActionForm action={softbanMemberAction} submitLabel="Softban" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="reason" className="field" placeholder="Raison" />
+            </ActionForm>
+          </div>
         </Card>
 
-        <Card title="👋 Expulser un membre" subtitle="Il peut revenir avec une invitation">
-          <ActionForm action={kickAction} submitLabel="Expulser" pendingLabel="…">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Identifiant du membre" hint="Clic droit sur le membre → Copier l’identifiant">
-                <input className="field mono" name="userId" required placeholder="123456789012345678" />
-              </Field>
-              <Field label="Raison">
-                <input className="field" name="reason" placeholder="Raison de l’expulsion" />
-              </Field>
-            </div>
-          </ActionForm>
+        <Card title="Rôles & pseudonyme">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ActionForm action={manageRoleAction} submitLabel="Ajouter le rôle" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <RolePicker name="roleId" value="" roles={roles} allowEmpty={false} emptyLabel="— choisir un rôle —" />
+            </ActionForm>
+            <ActionForm action={manageRoleAction} submitLabel="Retirer le rôle" className="space-y-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input type="hidden" name="remove" value="on" />
+              <RolePicker name="roleId" value="" roles={roles} allowEmpty={false} emptyLabel="— choisir un rôle —" />
+            </ActionForm>
+            <ActionForm action={nicknameAction} submitLabel="Changer le pseudo" className="space-y-2 sm:col-span-2">
+              <input type="hidden" name="userId" value={userId} />
+              <input name="nickname" className="field" placeholder="Nouveau pseudonyme (vide = réinitialiser)" maxLength={32} />
+            </ActionForm>
+          </div>
         </Card>
 
-        <Card title="⛔ Bannir un membre" subtitle="Il ne pourra plus revenir">
-          <ActionForm action={banAction} submitLabel="Bannir" pendingLabel="…">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Identifiant du membre">
-                <input className="field mono" name="userId" required placeholder="123456789012345678" />
-              </Field>
-              <Field label="Raison">
-                <input className="field" name="reason" placeholder="Raison du bannissement" />
-              </Field>
+        <Card title="Salons" subtitle="Purge, verrouillage, slowmode, nuke">
+          <ActionForm action={purgeAction} submitLabel="Purger" className="space-y-3">
+            <div>
+              <label className="label">Salon</label>
+              <ChannelPicker name="channelId" value="" options={channels} allowEmpty={false} emptyLabel="— choisir un salon —" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">Nombre (1-100)</label>
+                <input name="count" type="number" min={1} max={100} className="field" defaultValue={25} />
+              </div>
+              <div>
+                <label className="label">D’un membre (facultatif)</label>
+                <input name="userId" className="field mono" placeholder="identifiant" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Contient</label>
+              <input name="contains" className="field" placeholder="mot-clé (facultatif)" />
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-white/60">
+              {(['links', 'attachments', 'embeds', 'mentions', 'bots'] as const).map((key) => (
+                <label key={key} className="flex items-center gap-1.5">
+                  <input type="checkbox" name={key} className="h-3.5 w-3.5 accent-[#c9b8ff]" />
+                  {key === 'links'
+                    ? 'liens'
+                    : key === 'attachments'
+                      ? 'pièces jointes'
+                      : key === 'embeds'
+                        ? 'embeds'
+                        : key === 'mentions'
+                          ? 'mentions'
+                          : 'bots'}
+                </label>
+              ))}
             </div>
           </ActionForm>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <ActionForm action={lockChannelAction} submitLabel="Verrouiller" className="space-y-2">
+              <ChannelPicker name="channelId" value="" options={channels} allowEmpty={false} emptyLabel="— salon —" />
+            </ActionForm>
+            <ActionForm action={lockChannelAction} submitLabel="Déverrouiller" className="space-y-2">
+              <input type="hidden" name="unlock" value="on" />
+              <ChannelPicker name="channelId" value="" options={channels} allowEmpty={false} emptyLabel="— salon —" />
+            </ActionForm>
+            <ActionForm action={nukeChannelAction} submitLabel="Nuke" className="space-y-2">
+              <ChannelPicker name="channelId" value="" options={channels} allowEmpty={false} emptyLabel="— salon —" />
+            </ActionForm>
+            <ActionForm action={slowmodeAction} submitLabel="Slowmode" className="space-y-2 sm:col-span-3">
+              <ChannelPicker name="channelId" value="" options={channels} allowEmpty={false} emptyLabel="— salon —" />
+              <input name="seconds" type="number" min={0} className="field" defaultValue={5} aria-label="Secondes entre deux messages" />
+            </ActionForm>
+          </div>
         </Card>
       </div>
 
-      <Card className="mt-4" title="⏳ Slowmode" subtitle="Limite la fréquence d’envoi des messages d’un salon">
-        <ActionForm action={slowmodeAction} submitLabel="Appliquer le slowmode">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Salon textuel">
-              <select className="field" name="channelId" required>
-                {textChannels.map((channel) => (
-                  <option key={channel.id} value={channel.id}>{channel.name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Délai en secondes" hint="0 désactive le slowmode · maximum 21 600 secondes">
-              <input className="field" type="number" name="seconds" min={0} max={21600} step={1} defaultValue={0} required />
-            </Field>
-          </div>
-        </ActionForm>
-      </Card>
-
-      <Card className="mt-4" title="Dernières actions de modération">
-        {modLogs.length === 0 ? (
-          <EmptyState>Aucune action de modération enregistrée.</EmptyState>
+      <Card className="mt-5" title="Dossiers de modération" subtitle={`${cases.length} dossier(s) · ${state.cases.filter((c) => c.active).length} actif(s)`}>
+        {cases.length === 0 ? (
+          <EmptyState>Aucun dossier. Chaque sanction du bot ou du panel en crée un.</EmptyState>
         ) : (
-          <ul className="space-y-2 text-sm">
-            {modLogs.map((log) => (
-              <li key={log.id} className="flex items-start gap-3 border-b border-line/50 pb-2 last:border-none">
-                <span>🔨</span>
-                <span className="flex-1">
-                  <span className="block text-white/85">{log.action}</span>
-                  <span className="block text-xs text-white/40">
-                    {log.detail} · {relativeDate(log.at)} · {log.source}
-                  </span>
-                </span>
-                <Pill tone="muted">modération</Pill>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Type</th>
+                  <th>Membre</th>
+                  <th>Modérateur</th>
+                  <th>Raison</th>
+                  <th>Date</th>
+                  <th>État</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cases.slice(0, 60).map((modCase) => (
+                  <tr key={modCase.id}>
+                    <td className="mono text-xs">{modCase.number}</td>
+                    <td className="text-xs">
+                      {CASE_TYPE_EMOJI[modCase.type]} {CASE_TYPE_LABELS[modCase.type]}
+                    </td>
+                    <td className="mono text-xs">{modCase.userName || modCase.userId}</td>
+                    <td className="text-xs text-white/55">{modCase.moderatorName}</td>
+                    <td className="text-xs text-white/60">{modCase.reason}</td>
+                    <td className="text-xs text-white/45">{shortDate(modCase.createdAt)}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        {modCase.active ? <Pill tone="ok">actif</Pill> : <Pill tone="muted">retiré</Pill>}
+                        {modCase.directMessageSent ? <Pill tone="info">MP envoyé</Pill> : null}
+                        {modCase.autoAction ? <Pill tone="warn">{modCase.autoAction}</Pill> : null}
+                      </div>
+                    </td>
+                    <td>
+                      {modCase.active ? (
+                        <InlineAction
+                          action={revokeCaseAction}
+                          fields={{ caseId: modCase.id }}
+                          className="btn btn-ghost btn-xs"
+                          confirm="Retirer ce dossier du passif du membre ?"
+                        >
+                          Retirer
+                        </InlineAction>
+                      ) : (
+                        <span className="text-xs text-white/30">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
+
+      <div className="mt-6">
+        <ConfigEditor
+          sections={views}
+          values={valuesOf(config)}
+          action={saveModerationConfigAction}
+          submitLabel="Enregistrer la modération"
+        />
+      </div>
     </>
   );
 }

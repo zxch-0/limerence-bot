@@ -1,314 +1,323 @@
 # ✦ Limerence Bot
 
-Bot Discord **clé en main** qui construit et gère un serveur **de A à Z** : catégories, salons
-texte `➥ nom emoji`, salons vocaux (dont les privés `solo / duo / trio / quatuor / sections`),
-rôle automatique **limerencien** en blanc, confessions anonymes, annonces programmées, modération…
-le tout piloté depuis un **panel web d'administration**.
+Bot Discord **économie + jeux + modération**, piloté par un **panel web d'administration**.
 
-Le bot et le panel tournent dans **un seul service web Render** (plan gratuit possible) : un seul
-déploiement, une seule URL, une seule facture.
+Le bot ne crée **aucune structure** sur ton serveur : pas de catégories, pas de salons, pas de rôle
+fabriqué à l'installation. Il utilise uniquement les salons et les rôles **existants** que tu choisis
+dans le panel, et il apporte tout le reste :
+
+- 💰 une **économie complète** et configurable — **148 options** réparties en 17 sections ;
+- 🃏 un **blackjack** de casino (sabot, partage, double, assurance, abandon, paris annexes) — **44 options** ;
+- 🛒 une **boutique configurable** (rôles, boucliers, boosters, collections, stock, promotions) — **22 options** ;
+- 🛡️ une **modération avancée** avec **avertissements + message privé automatique**, dossiers numérotés,
+  sanctions graduées et auto-modération — **59 options** ;
+- 🪄 confessions anonymes, annonces programmées, embeds personnalisés, vocaux temporaires ;
+- 🎨 un **système d'interface unifié** : thème, menu central `/panel` et cartes par section —
+  **41 options**.
+
+**314 options** au total, **48 commandes slash**, et un seul service à déployer : le bot et le panel
+tournent dans le même process Node (plan gratuit Render possible).
 
 ---
 
 ## Sommaire
 
-1. [Ce que le bot crée](#1-ce-que-le-bot-crée)
-2. [Fonctionnalités](#2-fonctionnalités)
-3. [Le panel d'administration](#3-le-panel-dadministration)
-4. [Préparer Discord (5 minutes)](#4-préparer-discord-5-minutes)
-5. [Déployer sur Render (Blueprint)](#5-déployer-sur-render-blueprint)
-6. [Empêcher la mise en veille : UptimeRobot](#6-empêcher-la-mise-en-veille--uptimerobot)
-7. [Variables d'environnement](#7-variables-denvironnement)
-8. [Persistance des données](#8-persistance-des-données)
-9. [Développement local](#9-développement-local)
-10. [Commandes Discord](#10-commandes-discord)
-11. [Structure du projet](#11-structure-du-projet)
-12. [Dépannage](#12-dépannage)
+1. [Fonctionnalités](#1-fonctionnalités)
+2. [Le panel d'administration](#2-le-panel-dadministration)
+3. [Préparer Discord (5 minutes)](#3-préparer-discord-5-minutes)
+4. [Déployer sur Render (Blueprint)](#4-déployer-sur-render-blueprint)
+5. [Empêcher la mise en veille : UptimeRobot](#5-empêcher-la-mise-en-veille--uptimerobot)
+6. [Variables d'environnement](#6-variables-denvironnement)
+7. [Persistance des données](#7-persistance-des-données)
+8. [Développement local](#8-développement-local)
+9. [Commandes Discord](#9-commandes-discord)
+10. [Structure du projet](#10-structure-du-projet)
+11. [Dépannage](#11-dépannage)
 
 ---
 
-## 1. Ce que le bot crée
+## 1. Fonctionnalités
 
-Un blueprint **idempotent** : relance-le autant de fois que tu veux, rien n'est jamais dupliqué.
-Les ID Discord des catégories, salons et rôle gérés sont mémorisés par clé stable (avec Postgres ou le
-fichier persistant) ; même si cet état disparaît, le moteur récupère les salons existants par nom/slug.
-Il attend
-une lecture complète de Discord avant toute création (jamais de création « à l’aveugle »), signale chaque
-échec et aligne nom, catégorie, sujet, limites et permissions du blueprint.
+### 💰 Économie (148 options · 17 sections)
 
-| Catégorie | Salons texte | Salons vocaux |
-| --- | --- | --- |
-| 📋 **INFOS** | `➥ règles 📜` · `➥ annonces 📣` · `➥ présentation 👋` | — |
-| 🏠 **ACCUEIL** | `➥ chat 💬` · `➥ confessions 🤫` · `➥ photos 📸` | — |
-| 🌍 **PUBLIC** | `➥ general 👥` · `➥ gaming 🎮` · `➥ musique 🎵` · `➥ chill 🌙` | `🔊 Vocal général` · `🔊 Gaming` · `🔊 Musique` · `🔊 Chill` |
-| 🔒 **PRIVÉS** | — | `➕ créer-ton-salon` (hub) · `🔊 solo` (1) · `🔊 duo` (2) · `🔊 trio` (3) · `🔊 quatuor` (4) · `🔊 sections` |
-| 🛡️ **ADMIN** (masquée) | `➥ logs-modération 🧾` · `➥ confessions-en-attente 🗂️` · `➥ panel-admin 🖥️` | — |
-
-**Règles appliquées automatiquement :**
-
-* chaque **salon texte** commence par `➥` et finit par un **emoji** (symbole personnalisable dans le panel) ;
-* chaque **salon vocal** porte `🔊` en préfixe ;
-* le rôle **limerencien** est créé en **blanc** (`#FFFFFF`) et attribué **automatiquement** à chaque arrivée
-  (plus, si tu le souhaites, à tous les membres déjà présents) ;
-* l'**ACCUEIL** est ouvert à tous, la catégorie **ADMIN** est invisible pour `@everyone` et réservée aux rôles
-  ayant « Gérer le serveur » ;
-* `➥ annonces 📣`, `➥ règles 📜`, `➥ confessions 🤫` sont en **lecture seule** (seuls les admins écrivent).
-
-## 2. Fonctionnalités
-
-### 🤫 Confessions anonymes
-`/confession` ouvre un formulaire : l'auteur est enregistré côté bot (jamais affiché), la confession part
-dans le salon **`➥ confessions-en-attente 🗂️`** avec des boutons **Publier / Refuser**. À la publication,
-un embed anonyme est posté dans `➥ confessions 🤫` avec les réactions `❤️ 😮 🥺` (configurables), et le
-même bouton est disponible dans le panel. Anti-spam et longueur max réglables.
-
-### 🎧 Vocaux privés (les deux systèmes, comme demandé)
-* **Salons fixes** : `🔊 solo` (1 place), `🔊 duo` (2), `🔊 trio` (3), `🔊 quatuor` (4), `🔊 sections`.
-* **Salons temporaires (join-to-create)** : un membre rejoint `➕ créer-ton-salon`, le bot crée un salon
-  privé à son nom, l'y déplace, lui envoie un **MP avec panneau de contrôle** (renommer, verrouiller,
-  limite, réclamer, supprimer) et **supprime le salon dès qu'il se vide**.
-  Commandes `/vocal renommer | limite | verrouiller | autoriser | expulser | transferer | supprimer | reclamer`.
-
-### 📣 Annonces
-Publication immédiate ou **programmée** (`30m`, `2h`, `3j` ou une date `2026-10-06T20:00`), avec mention
-optionnelle `@here` / `@everyone`, depuis Discord (`/annonce`) ou depuis le panel (historique complet,
-annulation, renvoi).
-
-### 🪄 Embeds et règlement personnalisés
-Le panel **Embeds personnalisés** permet de composer une carte Discord avec aperçu en direct : titre,
-description, couleur, auteur, liens, images, pied de page et jusqu'à 25 champs. Enregistre plusieurs
-modèles, choisis un salon par défaut, puis publie-les depuis le panel. Les mêmes modèles sont disponibles
-avec `/embed creer`, `/embed liste`, `/embed publier`, `/embed modifier` et `/embed supprimer`.
-`/regles` ouvre un formulaire directement dans Discord, enregistre le modèle « Règlement » et le publie
-dans le salon règles du blueprint. Les mentions dans un embed ne déclenchent jamais de ping.
-
-### 🤍 Rôle automatique
-Rôle `limerencien` blanc, donné à l'arrivée, message de bienvenue automatique dans
-`➥ présentation 👋`, attribution possible aux membres existants.
-
-### 🛡️ Modération et gestion des salons
-Purge de messages (globale ou par auteur), verrouillage/déverrouillage, slowmode, expulsion et bannissement
-sont disponibles en commandes et dans le panel. `/salon creer` et `/salon supprimer` gèrent les salons
-individuellement.
-
-En dernier recours, **Supprimer tous les salons** existe dans l’onglet *Salons & catégories* et via
-`/salons tout-supprimer`. Il faut saisir une phrase de confirmation unique au serveur (format
-`SUPPRIMER-XXXXXX`) ; la première étape n’effectue aucune suppression. Cette opération est irréversible
-pour les salons/messages, mais ne supprime pas les rôles et peut être suivie d’un nouveau `/setup`.
-
-### 🧾 Journal
-Toutes les actions (bot, panel, admins) sont horodatées dans le panel **et** recopiées dans
-`➥ logs-modération 🧾`.
-
-## 3. Le panel d'administration
-
-Accessible sur l'URL Render de ton service, avec **connexion Discord OAuth2** réservée aux comptes ayant
-la permission « Gérer le serveur » (ou à `OWNER_DISCORD_ID` / `ADMIN_DISCORD_IDS`).
-
-| Page | Rôle |
+| Domaine | Ce que tu règles |
 | --- | --- |
-| **Tableau de bord** | état du bot, statistiques, journal récent, aperçu du blueprint |
-| **Déployer le blueprint** | checklist de mise en route, simulation (« simuler d'abord »), déploiement, dernier rapport détaillé |
-| **Structure du serveur** | audit : ce qui est conforme / manquant / à aligner |
-| **Salons & catégories** | éditeur visuel des catégories et salons (type, emoji, slug, sujet, places, lecture seule, admin, join-to-create) + aperçu en direct des noms Discord |
-| **Rôle limerencien** | nom, couleur (blanc par défaut), attribution auto, mentionnable |
-| **Vocaux privés** | réglages du join-to-create + liste des salons temporaires actifs (suppression, nettoyage) |
-| **Confessions** | file d'attente (publier / refuser / supprimer), réglages salons + réactions + anti-spam |
-| **Annonces** | création, programmation, historique, annulation |
-| **Embeds personnalisés** | créateur avec aperçu, champs, images, modèles enregistrés et publication |
-| **Membres** | liste, rôles, arrivée, attribution manuelle du rôle |
-| **Modération** | purge, verrouillage, slowmode, expulsion, bannissement |
-| **Journal** | toutes les entrées filtrables par niveau |
-| **Réglages** | préfixe `➥`, ID du serveur, auto-déploiement au démarrage, état des variables d'environnement, lien d'invitation, redémarrage du bot, réinitialisation |
+| Monnaie & banque | devise, symbole, solde de départ, plafond de poche, banque, dépôts/retraits, intérêts (taux, intervalle, plafond), rôle « boost » |
+| Gains passifs | récompense par message (min/max, cooldown, longueur minimale, anti-spam, plafond quotidien), gains vocaux par heure, récompenses de réactions |
+| Invitations & arrivées | prime d'invitation, pénalité si l'invité part, prime d'arrivée, âge minimum du compte |
+| Commandes | `/daily` (série, bonus hebdomadaire), `/work` (métiers personnalisés, échecs), `/crime` (risques, amendes, prison), `/rob` (pourcentage volé, bouclier, taxe), `/beg`, `/search` (lieux personnalisés), `/pay` (taxe, plafonds) |
+| Drops | cagnotte lâchée automatiquement dans un salon, montant, fréquence, durée de vie, premier arrivé |
+| Paris | mise minimale/maximale, pourcentage du solde, taxe de jeu, plafond de perte quotidienne |
+| Classement | taille du classement, bots masqués, membres ignorés, rôle du « plus riche » rafraîchi automatiquement |
+| Sécurité | anti-comptes multiples, historique des transactions, remise à zéro au départ, journal |
 
-> Si les identifiants Discord ne sont pas encore renseignés, le panel se lance en **mode démo** avec des
-> données fictives (aucune session anonyme n'est possible dès que l'OAuth2 est configuré).
+Chaque gain respecte les plafonds, les temps de recharge et les bonus de série — le calcul est dans
+`src/lib/economy/`, entièrement testé.
 
-## 4. Préparer Discord (5 minutes)
+### 🃏 Blackjack (44 options · 7 sections)
 
-1. **Créer l'application** → <https://discord.com/developers/applications> → *New Application*
-   (nom : `Limerence`).
-2. **Onglet Bot** → *Reset Token* → copie le token → ce sera `DISCORD_TOKEN`.
-3. **Onglet Bot** → active **SERVER MEMBERS INTENT** (obligatoire : rôle automatique + liste des membres).
-   Le *Message Content Intent* n'est **pas** nécessaire.
-4. **Onglet General Information** → copie l'**Application ID** → `DISCORD_CLIENT_ID`.
-5. **Onglet OAuth2** → copie le **Client Secret** → `DISCORD_CLIENT_SECRET`, puis dans
-   *Redirects* ajoute :
-   ```
-   http://localhost:3000/api/auth/callback
-   https://TON-SERVICE.onrender.com/api/auth/callback
-   ```
-   (la seconde URL n'est connue qu'après la création du service Render — tu peux la rajouter juste après).
-6. **Inviter le bot** (remplace `TON_CLIENT_ID`) :
-   ```
-   https://discord.com/oauth2/authorize?client_id=TON_CLIENT_ID&permissions=8&scope=bot%20applications.commands
-   ```
-   La permission **Administrateur** est recommandée : le bot crée catégories, salons, rôle et gère
-   les déplacements vocaux. (Variante sans Administrateur : Gérer le serveur, Gérer les salons, Gérer les
-   rôles, Gérer les messages, Expulser, Bannir, Déplacer des membres, Voir les salons.)
-7. **Récupérer l'ID du serveur** : active le *Mode développeur* (Paramètres Discord → Avancés),
-   clic droit sur le serveur → *Copier l'identifiant du serveur* → `DISCORD_GUILD_ID`.
+- Sabot de 1 à 8 jeux avec **pénétration réaliste** (remélange selon le pourcentage configuré) ;
+- **double**, **partage** (nombre de partages, partage d'as à une carte, double après partage),
+  **abandon** (pourcentage remboursé), **assurance** (plafond, ratio) ;
+- payout du blackjack (`3:2`, `6:5`…), règle du 17 souple, égalité remboursée ou perdue ;
+- paris annexes **21+3** et **paire parfaite** ;
+- bonus de série de victoires, compensation après une série de défaites, taxe de table ;
+- timeout de tour avec action automatique (rester / abandonner), messages et couleurs de table.
 
-## 5. Déployer sur Render (Blueprint)
+### 🛒 Boutique (22 options + catalogue illimité)
 
-1. Pousse ce dépôt sur **GitHub** (le fichier `render.yaml` est déjà prêt).
-2. Sur <https://dashboard.render.com> → **New** → **Blueprint** → sélectionne le dépôt.
-3. Render lit `render.yaml` et crée le service web **`limerence-bot`**
-   (plan *Free*, région *Frankfurt*, build `npm ci && npm run build`, start `npm start`,
-   health check `/health`).
-4. Renseigne les variables demandées (celles marquées `sync: false`) :
+- 4 types d'articles : **rôle Discord** (durée configurable), **bouclier anti-vol**, **booster de gains**,
+  **objet de collection** ;
+- stock (limité ou illimité) avec **réassort automatique**, promotions datées, taxe d'achat, revente,
+  limite par membre, rôle requis, âge de compte minimum, reçus en MP, vitrine dans un salon.
 
-   | Variable | Valeur |
-   | --- | --- |
-   | `DISCORD_TOKEN` | le token du bot |
-   | `DISCORD_CLIENT_ID` | l'Application ID |
-   | `DISCORD_CLIENT_SECRET` | le Client Secret |
-   | `DISCORD_GUILD_ID` | l'ID de ton serveur |
-   | `OWNER_DISCORD_ID` | ton ID Discord (accès panel garanti) |
+### 🛡️ Modération (59 options · 5 sections)
 
-   `SESSION_SECRET` est généré automatiquement par Render.
-5. Clique sur **Apply** / **Create**. Le premier build prend 2 à 4 minutes.
-6. Retourne dans le portail Discord (OAuth2 → Redirects) et ajoute l'URL du service :
-   `https://limerence-bot-XXXX.onrender.com/api/auth/callback`.
-7. Ouvre l'URL du service → **connexion Discord** → onglet **Déployer le blueprint** →
-   *Appliquer le blueprint*. Tu peux d'abord cliquer sur **🧪 Simuler** pour voir ce qui sera créé.
-8. Sur Discord, la commande `/setup` fait exactement la même chose (et `/structure` vérifie l'état).
+- **Avertissements** : dossier numéroté (`CAS-0001`), **message privé détaillé au membre** (raison,
+  modérateur, nombre d'avertissements, sanction déclenchée, date d'expiration), publication dans le salon
+  de modération, expiration automatique ;
+- **Sanctions automatiques** par palier : mute → kick → ban (paliers configurables) ;
+- **Dossiers** : historique complet, retrait, effacement, purge, consultation par membre ;
+- **Sanctions** : kick, ban, unban, softban, mute/unmute, pseudonyme, rôles, purge filtrée (liens, pièces
+  jointes, embeds, mentions, bots, mot-clé, membre), verrouillage, lockdown du serveur, slowmode, nuke ;
+- **Auto-modération** temps réel : liens (liste blanche), invitations, mentions massives, majuscules,
+  messages répétés, longueur, emojis, mots interdits, rôles/salons ignorés — avec testeur intégré au panel ;
+- **Anti-raid** : seuil d'arrivées, fenêtre de temps, âge minimum de compte, lockdown automatique.
 
-> ⏳ **Rate limits Discord** : la création de salons est limitée à ~10 par 10 minutes. Si le déploiement
-> s'interrompt à mi-chemin, relance-le simplement : il reprend là où il s'est arrêté, sans doublon.
+### 🎨 Interface du bot (41 options · 4 sections)
 
-## 6. Empêcher la mise en veille : UptimeRobot
+Tout ce que le bot affiche passe par un seul système d'interface, configurable dans le panel
+(page **Interface du bot**, commande Discord `/panel`) :
 
-Le plan gratuit Render endort un service web après **15 minutes sans trafic** : le bot se
-déconnecterait. Deux protections sont incluses :
+- **Thème** : couleur d'accent, emoji de marque, nom de marque, pied de page, horodatage,
+  miniatures, séparateur personnalisé, couleur par section ;
+- **Menu central** : une carte « hub » qui regroupe toutes les fonctionnalités, avec navigation par
+  boutons **et** menu déroulant, compte du membre, statistiques du serveur, classement, raccourcis de
+  commandes, lien du panel ;
+- **Sections** : économie 💰, blackjack 🃏, boutique 🛒, modération 🛡️ (réservable à l'équipe),
+  communauté 🪄 et serveur 📊 — chacune activable, masquée automatiquement si la fonction
+  correspondante est coupée ;
+- **Cartes** : indices de commandes, nombre maximal de boutons, barres de progression
+  (longueur et caractères personnalisables), application du thème aux cagnottes, dossiers et boutique ;
+- **Accueil** : boutons d'accès rapide sous le message de bienvenue.
 
-* **auto-ping interne** : le service s'appelle lui-même sur `/health` toutes les `KEEPALIVE_MINUTES`
-  (10 minutes par défaut, réglable dans `render.yaml`) ;
-* **Render** pingue déjà `/health` au démarrage (health check) → le bot s'allume immédiatement.
+Le panel affiche un **aperçu du rendu Discord** calculé avec les mêmes fonctions que le bot : ce que
+tu vois à l'écran est exactement ce que Discord affichera.
 
-Pour un maintien 24/7 fiable, ajoute un moniteur externe gratuit :
+### 🪄 Communauté
 
-1. Crée un compte sur <https://uptimerobot.com>.
-2. **Add New Monitor** → type `HTTP(s)`.
-3. **URL** : `https://TON-SERVICE.onrender.com/health`
-4. **Monitoring Interval** : `5 minutes`.
-5. (Optionnel) *Alert Contacts* : reçois un mail si le bot tombe.
+- **Confessions anonymes** : formulaire Discord, validation par l'équipe, réactions, cooldown ;
+- **Annonces** : envoi immédiat ou programmé (`30m`, `2h`, `3j`, date précise), mentions ;
+- **Embeds personnalisés** : créateur visuel, modèles réutilisables, publication depuis le panel ou Discord ;
+- **Vocaux temporaires** : salon hub « rejoindre pour créer », catégorie dédiée, renommage, verrouillage,
+  limite de places, réclamation, suppression automatique. Le **panneau de contrôle est envoyé en MP**
+  au propriétaire et ses boutons fonctionnent depuis le MP (comme `/vocal`) : le bot retrouve le
+  serveur concerné à partir du salon, sans exiger que la commande soit lancée dessus.
 
-Résultat : le service est réveillé toutes les 5 minutes, le bot reste connecté en permanence — sans
-aucun plan payant.
+---
 
-> Alternative « zéro veille » : fais tourner le bot 24/7 sur une VM gratuite (Oracle Cloud, fly.io…) avec
-> `DISCORD_TOKEN=… npm run start`, et garde Render uniquement pour le panel. Le code est identique.
+## 2. Le panel d'administration
 
-## 7. Variables d'environnement
+| Page | Contenu |
+| --- | --- |
+| `/` | Tableau de bord : état du bot, masse monétaire, parties, avertissements, classement, journal |
+| `/ui` | **Interface du bot** : thème, menu central, sections, cartes + aperçu du rendu Discord |
+| `/economy` | Les 148 options d'économie, avec recherche et aperçu des gains |
+| `/economy/players` | Comptes des membres : soldes, banque, inventaire, ajustements, réinitialisation |
+| `/blackjack` | Tables en cours, statistiques des joueurs, 44 options de jeu |
+| `/shop` | Catalogue éditable (création, stock, position, visibilité) + 22 options |
+| `/moderation` | Sanctions, rôles, salons, dossiers et 59 options |
+| `/warns` | Avertissements par membre, barème automatique, historique |
+| `/automod` | **Testeur de messages** + règles actives + détections récentes |
+| `/welcome` | Message d'arrivée (**salon de publication au choix**), rôle existant, vocaux temporaires, **salons du bot** (11 emplacements) |
+| `/confessions`, `/announcements`, `/embeds`, `/logs`, `/settings` | File de validation, annonces, modèles, journal, réglages |
 
-| Variable | Obligatoire | Description |
-| --- | --- | --- |
-| `DISCORD_TOKEN` | ✅ | token du bot (Dev Portal → Bot) |
-| `DISCORD_CLIENT_ID` | ✅ | Application ID |
-| `DISCORD_CLIENT_SECRET` | ✅ | Client Secret (connexion du panel) |
-| `DISCORD_GUILD_ID` | recommandé | ID du serveur géré (sinon : le premier serveur du bot) |
-| `SESSION_SECRET` | ✅ en prod | signature des sessions du panel (généré par `render.yaml`) |
-| `OWNER_DISCORD_ID` | recommandé | ton ID Discord : accès admin au panel garanti |
-| `ADMIN_DISCORD_IDS` | optionnel | autres admins du panel, séparés par des virgules |
-| `PUBLIC_URL` | optionnel | URL publique du panel (déduite de `RENDER_EXTERNAL_URL` sinon) |
-| `DATABASE_URL` | optionnel | base Postgres pour une config persistante (voir §8) |
-| `KEEPALIVE_MINUTES` | optionnel | fréquence de l'auto-ping `/health` (10 par défaut, `0` pour désactiver) |
-| `DEMO_MODE` | optionnel | `true` force le mode démo, `false` le désactive |
-| `TEMP_ROOMS_PER_USER` | optionnel | nombre max de salons vocaux temporaires par membre (`0` = illimité) |
+L'éditeur de configuration est **générique** : une option déclarée dans `src/lib/*/config.ts` apparaît
+automatiquement dans le panel, avec son type, ses bornes, son aide et ses dépendances.
 
-## 8. Persistance des données
+**Salon du message de bienvenue.** Le bot publie l'arrivée d'un membre dans l'ordre suivant :
 
-* **Sans `DATABASE_URL`** : la configuration (salons, rôle, réglages), les confessions, les annonces et le
-  journal sont stockés dans un fichier JSON (`data/state.json`). Sur le plan gratuit Render, ce fichier est
-  **effacé à chaque redéploiement** — ce n'est pas grave pour la structure du serveur (Discord est la
-  source de vérité : il suffit de relancer le déploiement du blueprint), mais l'historique des confessions,
-  annonces et logs est perdu.
-* **Avec `DATABASE_URL`** (Postgres) : tout est persisté. Le `render.yaml` contient un bloc `databases:`
-  commenté ; tu peux aussi utiliser **Neon** ou **Supabase** (gratuits, sans expiration) et coller
-  simplement l'URL de connexion dans `DATABASE_URL`.
+1. le **salon choisi** dans `Accueil & salons → Salon de publication` ;
+2. à défaut, l'emplacement **« Bienvenue »** ;
+3. à défaut, l'emplacement **« Salon principal »**.
 
-## 9. Développement local
+Si aucun des trois n'est renseigné, le message n'est pas envoyé et un avertissement est écrit dans le
+journal. La page affiche en direct le salon réellement utilisé et un aperçu du message rendu avec les
+mêmes jetons que le bot (`{membre}`, `{pseudo}`, `{serveur}`, `{membres}`, `{compte}`, `{invites}`,
+`{id}` — les anciens jetons anglais restent acceptés).
+
+---
+
+## 3. Préparer Discord (5 minutes)
+
+1. <https://discord.com/developers/applications> → **New Application**.
+2. Onglet **Bot** → *Reset Token* → copie le token dans `DISCORD_TOKEN`.
+3. Onglet **Bot** → active **Server Members Intent**, **Message Content Intent** et
+   **Presence Intent** (nécessaires pour la modération, l'économie et les vocaux).
+4. Onglet **OAuth2** → copie l'**Application ID** (`DISCORD_CLIENT_ID`) et le **Client Secret**
+   (`DISCORD_CLIENT_SECRET`).
+5. Onglet **OAuth2 → URL Generator** → scopes `bot` + `applications.commands`, permissions
+   **Administrator** → ouvre le lien et invite le bot sur ton serveur.
+6. Active le **mode développeur** dans Discord (Paramètres → Avancés) pour copier l'identifiant de ton
+   serveur (`DISCORD_GUILD_ID`), les salons et les rôles.
+
+> Le bot enregistre ses commandes slash au démarrage. Sur un serveur, la propagation est immédiate ;
+> en global, elle peut prendre jusqu'à une heure.
+
+---
+
+## 4. Déployer sur Render (Blueprint)
+
+1. Pousse ce repo sur GitHub.
+2. Render → **New** → **Blueprint** → sélectionne le repo.
+3. Renseigne les variables marquées `sync: false` (`DISCORD_TOKEN`, `DISCORD_CLIENT_ID`,
+   `DISCORD_CLIENT_SECRET`, `DISCORD_GUILD_ID`, `OWNER_DISCORD_ID`).
+4. Déploie, puis ouvre `https://TON-URL/` : connecte-toi avec un compte Discord ayant
+   **Gérer le serveur**.
+5. Dans **Accueil & salons**, associe les salons que le bot doit utiliser.
+
+`render.yaml` prévoit un seul service web (`/health` comme sonde) et, en commentaire, une base
+Postgres optionnelle.
+
+---
+
+## 5. Empêcher la mise en veille : UptimeRobot
+
+Le plan gratuit Render s'endort après 15 minutes d'inactivité. Crée un moniteur **HTTP(s)** sur
+`https://TON-URL/health` toutes les **5 minutes** : la route `/health` relance le bot si besoin
+(`KEEPALIVE_MINUTES` contrôle aussi l'auto-ping interne).
+
+---
+
+## 6. Variables d'environnement
+
+| Variable | Rôle |
+| --- | --- |
+| `DISCORD_TOKEN` | Token du bot (obligatoire en production) |
+| `DISCORD_CLIENT_ID` | Application ID — OAuth et enregistrement des commandes |
+| `DISCORD_CLIENT_SECRET` | Secret OAuth pour la connexion au panel |
+| `DISCORD_GUILD_ID` | Serveur géré (sinon auto-détection du premier serveur) |
+| `OWNER_DISCORD_ID` | Accès admin garanti au panel |
+| `ADMIN_DISCORD_IDS` | Autres admins (identifiants séparés par des virgules) |
+| `SESSION_SECRET` | Signature des sessions (généré par le Blueprint Render) |
+| `PUBLIC_URL` | URL publique du panel (callback OAuth) |
+| `DATABASE_URL` | PostgreSQL — sans cela, un fichier JSON local est utilisé |
+| `DATA_DIR` | Dossier du fichier JSON (défaut : `./data`) |
+| `DEMO_MODE` | Mode démo (refusé dès que l'OAuth Discord est configuré) |
+| `KEEPALIVE_MINUTES` | Auto-ping `/health` (0 = désactivé) |
+| `TEMP_ROOMS_PER_USER` | Vocaux temporaires par membre (0 = illimité) |
+| `LIMERENCE_NO_MIRROR` | `1` = ne pas recopier le journal dans Discord (tests) |
+
+---
+
+## 7. Persistance des données
+
+- **Avec `DATABASE_URL`** : tout l'état (configuration, comptes d'économie, boutique, dossiers de
+  modération, confessions, annonces, embeds, journal) est stocké en jsonb dans la table
+  `limerence_state`.
+- **Sans** : fichier `data/state.json` (attention : effacé à chaque redéploiement sur un plan sans
+  disque persistant — branche une base Postgres gratuite chez Neon ou Supabase pour le long terme).
+
+Les **salons et les rôles** restent la source de vérité : le bot ne garde que leurs identifiants.
+
+---
+
+## 8. Développement local
 
 ```bash
-git clone <ton-depot> && cd limerence-bot
 npm install
-cp .env.example .env      # puis renseigne le token, l'ID, le secret…
-npm run dev               # http://localhost:3000
+cp .env.example .env.local   # renseigne DISCORD_TOKEN et DISCORD_CLIENT_ID
+npm run dev                  # http://localhost:3000 (bot + panel)
 ```
 
-* Sans identifiants Discord, le panel démarre en **mode démo** : tu peux tout explorer.
-* `npm run build && npm start` reproduit exactement l'environnement Render.
-* `npm run typecheck` vérifie les types.
+Commandes utiles :
 
-## 10. Commandes Discord
+```bash
+npm run typecheck   # tsc --noEmit sur tout le projet
+npm run build       # build Next.js de production
+npm test            # suite de tests (logique économie, blackjack, boutique, modération, bot)
+```
 
-| Commande | Qui | Description |
-| --- | --- | --- |
-| `/setup` | Admins | crée ou répare toute la structure (`apercu: true` pour simuler) |
-| `/structure` | Admins | audit du serveur face au blueprint, y compris salons mal placés |
-| `/salon creer` · `/salon supprimer` | Gérer les salons | crée un salon texte/vocal ou supprime un salon après confirmation |
-| `/salons tout-supprimer` | Admins | outil d’urgence réservé aux admins, deuxième étape avec phrase `SUPPRIMER-XXXXXX` obligatoire |
-| `/embed creer` · `liste` · `publier` · `modifier` · `supprimer` | Admins | création par formulaire, publication et gestion des modèles persistants |
-| `/regles` | Admins | crée/modifie et publie le règlement dans le salon règles |
-| `/slowmode` · `/purge` · `/lock` · `/unlock` · `/kick` · `/ban` | Admins | modération et réglage des salons |
-| `/confession` | Tous | confession anonyme (formulaire ou message direct) |
-| `/annonce` | Admins | publie ou programme une annonce (`quand: 2h`) |
-| `/annonces liste` · `/annonces annuler` | Admins | suivi et annulation |
-| `/vocal renommer` · `limite` · `verrouiller` · `autoriser` · `expulser` · `transferer` · `supprimer` · `reclamer` | Propriétaire du salon | gestion du salon vocal temporaire |
-| `/panel` | Tous | lien vers le panel web |
-| `/ping` | Tous | latence du bot |
+La suite de tests (`tests/`) couvre la logique métier pure : 79 assertions réparties sur la
+normalisation des configurations, l'économie (gains, plafonds, intérêts, transferts), le règlement du
+blackjack (payouts, assurance, partage, taxes), la boutique (achats, stock, revente, réassort), la
+modération (dossiers, paliers, auto-modération, MP de sanction), la persistance et l'intégrité des
+48 commandes slash.
 
-## 11. Structure du projet
+---
+
+## 9. Commandes Discord
+
+**48 commandes** enregistrées au démarrage.
+
+### Économie & jeux (15)
+
+`/balance` · `/profil` · `/daily` · `/work` · `/crime` · `/rob` · `/beg` · `/search` · `/pay` ·
+`/bank` (solde, depot, retrait) · `/leaderboard` · `/inventaire` · `/revendre` ·
+`/shop` (liste, acheter, vitrine) · `/blackjack` (jouer, carte, rester, doubler, split, assurance,
+abandonner, quitter, stats, regles)
+
+### Modération (25)
+
+`/warn` (ajouter, liste, retirer, effacer, modifier) · `/cas` (voir, membre, liste) · `/kick` · `/ban` ·
+`/unban` · `/softban` · `/mute` · `/unmute` · `/nick` · `/purge` (messages, utilisateur, bots, contient,
+liens, pieces-jointes, embeds, mentions, tout) · `/lock` · `/unlock` · `/lockdown` · `/unlockdown` ·
+`/slowmode` · `/nuke` · `/addrole` · `/removerole` · `/userinfo` · `/serverinfo` · `/roleinfo` ·
+`/banlist` · `/antiraid` (statut, activer, desactiver) · `/economie` (donner, retirer, definir, reset,
+etat) · `/aide`
+
+### Communauté & vocal (8)
+
+`/confession` · `/annonce` · `/annonces` (liste, annuler) · `/embed` (creer, liste, publier, modifier,
+supprimer) · `/regles` · `/vocal` (renommer, limite, verrouiller, autoriser, expulser, transferer,
+supprimer, reclamer) · `/panel` · `/ping`
+
+---
+
+## 10. Structure du projet
 
 ```
 src/
 ├── app/
-│   ├── (panel)/            # pages du panel (protégées par session admin)
-│   │   ├── actions.ts      # server actions : blueprint, config, confessions, modération…
-│   │   ├── page.tsx        # tableau de bord
-│   │   ├── setup/ structure/ channels/ role/ voice/
-│   │   ├── confessions/ announcements/ members/ moderation/ logs/ settings/
-│   │   └── layout.tsx      # sidebar + garde d'accès
-│   ├── api/auth/           # OAuth2 Discord (login + callback)
-│   ├── health/             # health check Render / UptimeRobot + réveil du bot
-│   └── login/              # page de connexion / mode démo
-├── bot/
-│   ├── events.ts           # ClientReady, GuildMemberAdd, VoiceStateUpdate, Interactions
-│   ├── commands.ts         # commandes slash (définition + exécution)
-│   ├── confessions.ts      # anonymisation, file d'attente, publication
-│   ├── tempRooms.ts        # join-to-create + panneau de contrôle
-│   ├── moderation.ts       # purge, lock, kick, ban
-│   ├── announcements.ts    # annonces immédiates / programmées
-│   ├── scheduler.ts        # tick 30 s (annonces, ménage)
-│   └── resolve.ts          # résolution des salons du blueprint
-├── lib/
-│   ├── blueprint.ts        # moteur : crée/répare la structure du serveur
-│   ├── config.ts           # blueprint par défaut (catégories, salons, rôle)
-│   ├── store.ts            # persistance (Postgres ou fichier JSON)
-│   ├── boot.ts             # démarrage du bot + auto-ping /health
-│   ├── auth.ts             # OAuth2 Discord, sessions JWT, mode démo
-│   ├── logs.ts             # journal du panel + miroir Discord
-│   └── discord/client.ts   # instance unique du client Discord
-└── components/             # UI du panel (sidebar, formulaires, éditeur de salons…)
-render.yaml                 # Blueprint Render (1 service web)
+│   ├── (panel)/            # panel d'administration (pages + actions serveur)
+│   │   ├── actions/        #   config, economy, shop, moderation, content, rooms
+│   │   ├── economy/        #   configuration + comptes des membres
+│   │   ├── blackjack/ shop/ moderation/ automod/ warns/ welcome/
+│   │   └── confessions/ announcements/ embeds/ logs/ settings/
+│   ├── api/auth/           # OAuth2 Discord
+│   ├── health/route.ts     # sonde + auto-redémarrage du bot
+│   └── login/page.tsx
+├── bot/                    # couche Discord (événements, commandes, récompenses, scheduler)
+│   └── ui.ts               # design system + menu central (cartes pures → embeds Discord)
+├── components/             # Sidebar, ConfigEditor, DiscordPreview, sélecteurs, formulaires
+└── lib/
+    ├── economy/            # configuration (148 options), cœur de l'économie, actions
+    ├── blackjack/          # configuration (44), moteur de jeu, table
+    ├── shop/               # configuration (22), articles, achats
+    ├── moderation/         # configuration (59), dossiers, auto-modération
+    ├── ui/                 # configuration de l'interface (41 options)
+    ├── welcome.ts          # jetons du message d'accueil + choix du salon
+    ├── schema-fields.ts    # moteur de formulaires générique (types, bornes, validation)
+    ├── channels.ts         # résolution des 11 emplacements de salon
+    ├── store.ts            # persistance (Postgres ou JSON)
+    └── config.ts types.ts  # état global
+tests/                      # suite node --test (logique pure, sans Discord)
 ```
 
-## 12. Dépannage
-
-| Symptôme | Solution |
-| --- | --- |
-| **« Used disallowed intents »** dans les logs | active **SERVER MEMBERS INTENT** dans Dev Portal → Bot |
-| **Des salons manquent après le blueprint** | lance `/structure` ou ouvre *Structure du serveur* : l’audit distingue les salons manquants, déplacés et à aligner. Vérifie les erreurs du dernier rapport puis relance `/setup` ; une lecture Discord échouée n’entraîne pas de création à l’aveugle. |
-| **`/setup` s'arrête au milieu** | Discord peut appliquer des limites de création ; relance `/setup`, le moteur est sérialisé, mémorise les ID et reprend sans doublon. Vérifie aussi que le bot a *Gérer les salons* et que son rôle est assez haut. |
-| **Le panel refuse la connexion** | ton compte doit avoir *Gérer le serveur* sur le serveur configuré, ou renseigne `OWNER_DISCORD_ID` / `ADMIN_DISCORD_IDS` |
-| **« Invalid OAuth2 redirect_uri »** | ajoute `https://TON-SERVICE.onrender.com/api/auth/callback` dans OAuth2 → Redirects |
-| **Le bot se déconnecte au bout de 15 min** | le service Render s'est endormi : configure UptimeRobot sur `/health` (§6) |
-| **Le rôle limerencien n'est pas attribué** | vérifie que le rôle du bot est **plus haut** que `limerencien` dans la hiérarchie des rôles |
-| **Confessions perdues après un redéploiement** | ajoute une base Postgres (`DATABASE_URL`, §8) |
-| **`/vocal` dit « Ce salon n'est pas temporaire »** | ce salon fait partie des salons fixes (`solo`, `duo`…) : seuls les salons créés via le hub sont pilotables |
+**Règle d'architecture** : `src/lib/**` est de la logique pure (testable sans Discord), `src/bot/**`
+parle à Discord et n'importe jamais Next.js, `src/app/**` ne fait que de l'interface.
 
 ---
 
-Fait avec 🤍 pour la communauté Limerence — blueprint, confessions anonymes et vocaux privés, prêts à
-l'emploi.
+## 11. Dépannage
+
+| Symptôme | Cause / solution |
+| --- | --- |
+| Les commandes slash n'apparaissent pas | `DISCORD_CLIENT_ID` manquant, ou propagation globale (jusqu'à 1 h). Relance depuis **Réglages → Redémarrer le bot** |
+| « Bot hors ligne » dans le panel | `DISCORD_TOKEN` invalide ou intents non activés dans le portail développeur |
+| Le bot ne poste rien | Aucun salon associé : va dans **Accueil & salons** et renseigne les emplacements |
+| `Used disallowed intents` | Active **Server Members Intent** et **Message Content Intent** |
+| Impossible de mute / ajouter un rôle | Remonte le bot dans la hiérarchie des rôles du serveur |
+| Le panel demande une connexion Discord | Normal dès que `DISCORD_CLIENT_ID` + `DISCORD_CLIENT_SECRET` sont définis |
+| Les données disparaissent au redéploiement | Branche `DATABASE_URL` (Postgres) — le fichier JSON n'est pas persistant sur Render |
+| `/health` renvoie `booted: false` | Regarde les logs Render : le token ou la connexion Postgres est en cause |

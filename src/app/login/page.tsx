@@ -34,9 +34,9 @@ export default async function LoginPage({
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-white">Limerence</h1>
         <p className="mt-2 max-w-lg text-sm text-white/50">
-          Panel d’administration du bot Discord : blueprint du serveur complet (catégories, salons
-          texte <span className="mono text-lilac">➥ nom emoji</span>, vocaux, salons privés),
-          confessions anonymes, annonces, modération et journal.
+          Panel d’administration du bot Discord : économie configurable, blackjack, boutique,
+          modération avec avertissements et message privé automatique — le tout sans jamais créer
+          de structure sur ton serveur.
         </p>
       </div>
 
@@ -79,9 +79,9 @@ export default async function LoginPage({
 
       <ul className="grid w-full gap-3 text-sm text-white/45 sm:grid-cols-3">
         {[
-          ['🧱', 'Blueprint idempotent', 'Créer ou réparer le serveur en un clic, sans doublon.'],
-          ['🤫', 'Confessions anonymes', 'Validation par les admins, réactions, publication propre.'],
-          ['🎧', 'Vocaux privés', 'solo, duo, trio, quatuor + salons temporaires à la demande.'],
+          ['💰', 'Économie & blackjack', '273 options : gains, drops, banque, tables de jeu, boutique.'],
+          ['🛡️', 'Modération complète', 'Avertissements avec MP, dossiers, sanctions graduées, auto-modération.'],
+          ['🪄', 'Communauté', 'Confessions anonymes, annonces programmées, embeds, vocaux temporaires.'],
         ].map(([emoji, title, desc]) => (
           <li key={title} className="rounded-2xl border border-line bg-white/[0.02] p-4">
             <span className="text-lg">{emoji}</span>

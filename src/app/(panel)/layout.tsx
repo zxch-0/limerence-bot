@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { Sidebar, type NavItem } from '@/components/Sidebar';
+import { Sidebar, type NavGroup } from '@/components/Sidebar';
 import { requireAdmin } from '@/lib/auth';
 import { ensureBoot } from '@/lib/boot';
 import { botStatus } from '@/lib/discord/client';
@@ -16,29 +16,57 @@ export default async function PanelLayout({ children }: { children: React.ReactN
 
   const state = await getState();
   const bot = botStatus();
-  const pending = state.confessions.filter((c) => c.status === 'pending').length;
-  const scheduled = state.announcements.filter((a) => a.status === 'scheduled').length;
+  const pendingConfessions = state.confessions.filter((c) => c.status === 'pending').length;
+  const scheduledAnnouncements = state.announcements.filter((a) => a.status === 'scheduled').length;
+  const activeWarns = state.cases.filter((c) => c.type === 'warn' && c.active).length;
+  const openTables = Object.values(state.blackjack).filter((game) => game.status !== 'finished').length;
 
-  const items: NavItem[] = [
-    { href: '/', label: 'Tableau de bord', emoji: '✦' },
-    { href: '/setup', label: 'Déployer le blueprint', emoji: '🚀' },
-    { href: '/structure', label: 'Structure du serveur', emoji: '🧱' },
-    { href: '/channels', label: 'Salons & catégories', emoji: '📚' },
-    { href: '/role', label: 'Rôle limerencien', emoji: '🤍' },
-    { href: '/voice', label: 'Vocaux privés', emoji: '🎧' },
-    { href: '/confessions', label: 'Confessions', emoji: '🤫', badge: pending || undefined },
-    { href: '/announcements', label: 'Annonces', emoji: '📣', badge: scheduled || undefined },
-    { href: '/embeds', label: 'Embeds personnalisés', emoji: '🪄', badge: state.embeds.length || undefined },
-    { href: '/members', label: 'Membres', emoji: '👥' },
-    { href: '/moderation', label: 'Modération', emoji: '🛡️' },
-    { href: '/logs', label: 'Journal', emoji: '🧾' },
-    { href: '/settings', label: 'Réglages', emoji: '⚙️' },
+  const groups: NavGroup[] = [
+    {
+      id: 'general',
+      label: 'Général',
+      items: [
+        { href: '/', label: 'Tableau de bord', emoji: '✦' },
+        { href: '/ui', label: 'Interface du bot', emoji: '🎨' },
+        { href: '/welcome', label: 'Accueil & salons', emoji: '👋' },
+        { href: '/logs', label: 'Journal', emoji: '🧾', badge: state.logs.length || undefined },
+        { href: '/settings', label: 'Réglages', emoji: '⚙️' },
+      ],
+    },
+    {
+      id: 'economy',
+      label: 'Économie & jeux',
+      items: [
+        { href: '/economy', label: 'Configuration', emoji: '💰' },
+        { href: '/economy/players', label: 'Comptes des membres', emoji: '👥' },
+        { href: '/blackjack', label: 'Blackjack', emoji: '🃏', badge: openTables || undefined },
+        { href: '/shop', label: 'Boutique', emoji: '🛒', badge: state.shopItems.length || undefined },
+      ],
+    },
+    {
+      id: 'moderation',
+      label: 'Modération',
+      items: [
+        { href: '/moderation', label: 'Sanctions & dossiers', emoji: '🛡️' },
+        { href: '/warns', label: 'Avertissements', emoji: '⚠️', badge: activeWarns || undefined },
+        { href: '/automod', label: 'Auto-modération', emoji: '🤖' },
+      ],
+    },
+    {
+      id: 'community',
+      label: 'Communauté',
+      items: [
+        { href: '/confessions', label: 'Confessions', emoji: '🤫', badge: pendingConfessions || undefined },
+        { href: '/announcements', label: 'Annonces', emoji: '📣', badge: scheduledAnnouncements || undefined },
+        { href: '/embeds', label: 'Embeds personnalisés', emoji: '🪄', badge: state.embeds.length || undefined },
+      ],
+    },
   ];
 
   return (
     <div className="min-h-dvh lg:pl-72">
       <Sidebar
-        items={items}
+        groups={groups}
         user={{
           name: user.globalName ?? user.username,
           avatarUrl: user.avatarUrl,

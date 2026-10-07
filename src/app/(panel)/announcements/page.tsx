@@ -1,19 +1,18 @@
 import { ActionForm, InlineAction } from '@/components/ActionForm';
+import { ChannelPicker } from '@/components/ChannelPicker';
 import { Card, EmptyState, Field, PageHeader, Pill, shortDate } from '@/components/ui';
 import { getContext } from '@/lib/panel';
-import { allChannels } from '@/lib/config';
 import {
   cancelAnnouncementAction,
   createAnnouncementAction,
   deleteAnnouncementAction,
   sendAnnouncementNowAction,
-} from '../actions';
+} from '../actions/content';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AnnouncementsPage() {
-  const { config, state } = await getContext();
-  const textChannels = allChannels(config).filter((c) => c.kind === 'text');
+  const { state, channels } = await getContext();
 
   return (
     <>
@@ -37,13 +36,12 @@ export default async function AnnouncementsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Salon">
-                <select className="field" name="channelKey" defaultValue="announcements">
-                  {textChannels.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {config.prefix} {c.slug} {c.emoji}
-                    </option>
-                  ))}
-                </select>
+                <ChannelPicker
+                  name="channelId"
+                  value=""
+                  options={channels}
+                  emptyLabel="— emplacement « Annonces » —"
+                />
               </Field>
               <Field label="Quand" hint="Vide = tout de suite · 30m · 2h · 3j · 2026-10-06T20:00">
                 <input className="field" name="when" placeholder="tout de suite" />
@@ -76,7 +74,11 @@ export default async function AnnouncementsPage() {
                     ) : (
                       <Pill tone="muted">annulée</Pill>
                     )}
-                    <span className="mono">{a.channelKey}</span>
+                    {a.channelId ? (
+                      <span className="mono">salon {a.channelId}</span>
+                    ) : (
+                      <span className="text-white/40">emplacement « Annonces »</span>
+                    )}
                     <span>
                       {a.status === 'scheduled' && a.scheduledFor
                         ? `envoi ${shortDate(a.scheduledFor)}`
