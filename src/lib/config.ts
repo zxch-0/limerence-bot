@@ -1,198 +1,57 @@
-import type {
-  AppConfig,
-  BlueprintCategory,
-  BlueprintChannel,
-  StoreState,
-} from './types';
+import { DEFAULT_ECONOMY_CONFIG } from './economy/config';
+import { DEFAULT_BLACKJACK_CONFIG } from './blackjack/config';
+import { DEFAULT_SHOP_CONFIG } from './shop/config';
+import { DEFAULT_MODERATION_CONFIG } from './moderation/config';
+import { DEFAULT_UI_CONFIG } from './ui/config';
+import { mergeValues } from './schema-fields';
+import { CHANNEL_SLOTS, type AppConfig, type ChannelSlots, type StoreState } from './types';
 
 // ============================================================
-//  Blueprint Limerence — la structure du serveur
-//  Règle : chaque salon TEXTE commence par ➥ et finit par un emoji
+//  Configuration par défaut + fusion avec l'état sauvegardé
+//
+//  Règle : la configuration sauvegardée gagne toujours, mais toute
+//  nouvelle option introduite par une mise à jour est ajoutée avec
+//  sa valeur par défaut. Un état écrit par une ancienne version du
+//  bot reste donc utilisable sans migration manuelle.
 // ============================================================
 
-export const DEFAULT_PREFIX = '➥';
-
-/** Nom d'un salon dans Discord à partir d'un salon du blueprint. */
-export function channelName(
-  channel: BlueprintChannel,
-  prefix: string = DEFAULT_PREFIX,
-): string {
-  if (channel.kind === 'voice') {
-    const base = channel.label || channel.slug;
-    return channel.emoji ? `${channel.emoji} ${base}` : base;
-  }
-  return `${prefix} ${channel.slug} ${channel.emoji}`.replace(/\s+/g, ' ').trim();
+export function emptyChannels(): ChannelSlots {
+  return CHANNEL_SLOTS.reduce((acc, key) => {
+    acc[key] = '';
+    return acc;
+  }, {} as ChannelSlots);
 }
-
-/** Nom "attendu" pour comparer avec l'existant sur le serveur. */
-export function expectedName(
-  channel: BlueprintChannel,
-  config: AppConfig,
-): string {
-  return channelName(channel, config.prefix);
-}
-
-export const DEFAULT_CATEGORIES: BlueprintCategory[] = [
-  {
-    key: 'infos',
-    slug: 'infos',
-    emoji: '📋',
-    channels: [
-      {
-        key: 'rules',
-        kind: 'text',
-        slug: 'règles',
-        emoji: '📜',
-        topic: 'Les règles du serveur — à lire avant de discuter.',
-        readOnly: true,
-      },
-      {
-        key: 'announcements',
-        kind: 'text',
-        slug: 'annonces',
-        emoji: '📣',
-        topic: 'Toutes les annonces importantes du serveur.',
-        readOnly: true,
-      },
-      {
-        key: 'presentation',
-        kind: 'text',
-        slug: 'présentation',
-        emoji: '👋',
-        topic: 'Présente-toi en quelques mots, on veut te connaître !',
-      },
-    ],
-  },
-  {
-    key: 'accueil',
-    slug: 'accueil',
-    emoji: '🏠',
-    channels: [
-      {
-        key: 'chat',
-        kind: 'text',
-        slug: 'chat',
-        emoji: '💬',
-        topic: 'On discute de tout et de rien ici ✨',
-      },
-      {
-        key: 'confessions',
-        kind: 'text',
-        slug: 'confessions',
-        emoji: '🤫',
-        topic: 'Confessions anonymes publiées par le bot. Respect absolu.',
-        readOnly: true,
-      },
-      {
-        key: 'photos',
-        kind: 'text',
-        slug: 'photos',
-        emoji: '📸',
-        topic: 'Partage tes plus belles photos 🌸',
-      },
-    ],
-  },
-  {
-    key: 'public',
-    slug: 'public',
-    emoji: '🌍',
-    channels: [
-      { key: 'general', kind: 'text', slug: 'general', emoji: '👥', topic: 'Le salon principal du serveur.' },
-      { key: 'gaming', kind: 'text', slug: 'gaming', emoji: '🎮', topic: 'Jeux vidéo, teams et sessions.' },
-      { key: 'musique', kind: 'text', slug: 'musique', emoji: '🎵', topic: 'Partage tes sons et tes playlists.' },
-      { key: 'chill', kind: 'text', slug: 'chill', emoji: '🌙', topic: 'Discussion tranquille, sans prise de tête.' },
-      { key: 'vocal-general', kind: 'voice', slug: 'vocal-general', label: 'Vocal général', emoji: '🔊', userLimit: 0 },
-      { key: 'vocal-gaming', kind: 'voice', slug: 'vocal-gaming', label: 'Gaming', emoji: '🔊', userLimit: 0 },
-      { key: 'vocal-musique', kind: 'voice', slug: 'vocal-musique', label: 'Musique', emoji: '🔊', userLimit: 0 },
-      { key: 'vocal-chill', kind: 'voice', slug: 'vocal-chill', label: 'Chill', emoji: '🔊', userLimit: 0 },
-    ],
-  },
-  {
-    key: 'prives',
-    slug: 'privés',
-    emoji: '🔒',
-    channels: [
-      {
-        key: 'hub',
-        kind: 'voice',
-        slug: 'créer-ton-salon',
-        label: 'créer-ton-salon',
-        emoji: '➕',
-        userLimit: 0,
-        isHub: true,
-      },
-      { key: 'solo', kind: 'voice', slug: 'solo', label: 'solo', emoji: '🔊', userLimit: 1 },
-      { key: 'duo', kind: 'voice', slug: 'duo', label: 'duo', emoji: '🔊', userLimit: 2 },
-      { key: 'trio', kind: 'voice', slug: 'trio', label: 'trio', emoji: '🔊', userLimit: 3 },
-      { key: 'quatuor', kind: 'voice', slug: 'quatuor', label: 'quatuor', emoji: '🔊', userLimit: 4 },
-      { key: 'sections', kind: 'voice', slug: 'sections', label: 'sections', emoji: '🔊', userLimit: 0 },
-    ],
-  },
-  {
-    key: 'admin',
-    slug: 'admin',
-    emoji: '🛡️',
-    adminOnly: true,
-    channels: [
-      {
-        key: 'logs',
-        kind: 'text',
-        slug: 'logs-moderation',
-        emoji: '🧾',
-        topic: 'Journal des actions du bot et du panel.',
-        readOnly: true,
-        adminOnly: true,
-      },
-      {
-        key: 'review',
-        kind: 'text',
-        slug: 'confessions-en-attente',
-        emoji: '🗂️',
-        topic: 'File d’attente des confessions à valider.',
-        adminOnly: true,
-      },
-      {
-        key: 'panel',
-        kind: 'text',
-        slug: 'panel-admin',
-        emoji: '🖥️',
-        topic: 'Lien vers le panel d’administration du serveur.',
-        readOnly: true,
-        adminOnly: true,
-      },
-    ],
-  },
-];
 
 export const DEFAULT_CONFIG: AppConfig = {
-  version: 1,
+  version: 2,
   guildId: process.env.DISCORD_GUILD_ID?.trim() || null,
-  prefix: DEFAULT_PREFIX,
-  role: {
-    name: 'limerencien',
-    color: '#FFFFFF',
-    hoist: false,
-    mentionable: false,
-    autoAssign: true,
-    assignToExisting: true,
-  },
-  categories: DEFAULT_CATEGORIES,
-  adminCategoryKey: 'admin',
-  joinToCreate: {
+  channels: emptyChannels(),
+  welcome: {
     enabled: true,
-    hubChannelKey: 'hub',
-    categoryKey: 'prives',
+    roleId: '',
+    channelId: '',
+    message:
+      'Bienvenue {mention} sur **{server}** ! Tu démarres avec {balance}.\nFais `/daily`, `/work` et `/shop` pour remplir tes poches ✨',
+    mentionMember: true,
+    directMessage: '',
+    assignToExisting: false,
+  },
+  joinToCreate: {
+    enabled: false,
+    hubChannelId: '',
+    categoryId: '',
     defaultSize: 0,
     autoDelete: true,
     moveOwner: true,
     onePerMember: false,
     allowRename: true,
     allowLock: true,
+    nameTemplate: '🔊 {name}',
   },
   confessions: {
     enabled: true,
-    targetChannelKey: 'confessions',
-    reviewChannelKey: 'review',
+    targetChannelId: '',
+    reviewChannelId: '',
     requireApproval: true,
     reactions: ['❤️', '😮', '🥺'],
     cooldownSeconds: 120,
@@ -201,74 +60,65 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   logs: {
     enabled: true,
-    channelKey: 'logs',
+    channelId: '',
     keepInPanel: true,
     maxEntries: 500,
   },
-  autoSetupOnBoot: false,
+  economy: structuredClone(DEFAULT_ECONOMY_CONFIG),
+  blackjack: structuredClone(DEFAULT_BLACKJACK_CONFIG),
+  shop: structuredClone(DEFAULT_SHOP_CONFIG),
+  moderation: structuredClone(DEFAULT_MODERATION_CONFIG),
+  ui: structuredClone(DEFAULT_UI_CONFIG),
 };
-
-// ------------------------------------------------------------
-//  Utilitaires
-// ------------------------------------------------------------
-
-export function allChannels(config: AppConfig): Array<BlueprintChannel & { categoryKey: string }> {
-  return config.categories.flatMap((c) =>
-    c.channels.map((ch) => ({ ...ch, categoryKey: c.key })),
-  );
-}
-
-export function findChannel(config: AppConfig, key: string): BlueprintChannel | undefined {
-  return allChannels(config).find((c) => c.key === key);
-}
-
-export function findCategory(config: AppConfig, key: string): BlueprintCategory | undefined {
-  return config.categories.find((c) => c.key === key);
-}
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function mergeObject<T extends object>(base: T, override: unknown): T {
+  if (!isPlainObject(override)) return structuredClone(base);
+  const result = structuredClone(base) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined) continue;
+    if (isPlainObject(value) && isPlainObject(result[key])) {
+      result[key] = mergeObject(result[key] as object, value);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      result[key] = [...value];
+      continue;
+    }
+    result[key] = value;
+  }
+  return result as T;
+}
+
 /**
- * Fusion profonde : on garde les valeurs de `override` (config sauvegardée)
- * tout en récupérant les nouvelles clés de `base` (défauts après mise à jour).
- * Les tableaux (catégories, salons) sont repris tels quels depuis `override`
- * mais complétés par les salons manquants du blueprint par défaut.
+ * Fusionne une configuration sauvegardée (potentiellement ancienne ou
+ * partielle) avec les valeurs par défaut courantes.
  */
 export function mergeConfig(base: AppConfig, override: Partial<AppConfig> | undefined): AppConfig {
-  if (!override) return structuredClone(base);
+  if (!override || typeof override !== 'object') return structuredClone(base);
 
-  const merged: AppConfig = {
-    ...structuredClone(base),
-    ...override,
-    role: { ...base.role, ...(override.role ?? {}) },
-    joinToCreate: { ...base.joinToCreate, ...(override.joinToCreate ?? {}) },
-    confessions: { ...base.confessions, ...(override.confessions ?? {}) },
-    logs: { ...base.logs, ...(override.logs ?? {}) },
-    categories: base.categories,
-  };
+  const merged = mergeObject(base, override);
 
-  // catégories : on part de l'existant sauvegardé, on ajoute les catégories du
-  // blueprint disparues, et on complète chaque catégorie avec les salons manquants
-  const savedCats = Array.isArray(override.categories) && override.categories.length
-    ? override.categories
-    : [];
+  // les quatre grandes configurations passent par le moteur de champs :
+  // toute option manquante est complétée, toute valeur hors bornes est corrigée
+  merged.economy = mergeValues(DEFAULT_ECONOMY_CONFIG, override.economy as never);
+  merged.blackjack = mergeValues(DEFAULT_BLACKJACK_CONFIG, override.blackjack as never);
+  merged.shop = mergeValues(DEFAULT_SHOP_CONFIG, override.shop as never);
+  merged.moderation = mergeValues(DEFAULT_MODERATION_CONFIG, override.moderation as never);
+  merged.ui = mergeValues(DEFAULT_UI_CONFIG, override.ui as never);
 
-  if (savedCats.length) {
-    const seen = new Set(savedCats.map((c) => c.key));
-    const result: BlueprintCategory[] = savedCats.map((saved) => {
-      const def = base.categories.find((c) => c.key === saved.key);
-      if (!def) return saved;
-      const savedChannels = Array.isArray(saved.channels) ? saved.channels : [];
-      const missing = def.channels.filter((dc) => !savedChannels.some((sc) => sc.key === dc.key));
-      return { ...def, ...saved, channels: [...savedChannels, ...missing] };
-    });
-    for (const def of base.categories) {
-      if (!seen.has(def.key)) result.push(structuredClone(def));
-    }
-    merged.categories = result;
+  // salon manquant -> emplacement vide
+  for (const slot of CHANNEL_SLOTS) {
+    if (typeof merged.channels[slot] !== 'string') merged.channels[slot] = '';
   }
+
+  if (!Array.isArray(merged.confessions.reactions)) {
+    merged.confessions.reactions = [...DEFAULT_CONFIG.confessions.reactions];
+  }
+  if (typeof merged.guildId !== 'string') merged.guildId = null;
 
   return merged;
 }
@@ -281,6 +131,12 @@ export function emptyState(): StoreState {
     embeds: [],
     logs: [],
     tempRooms: [],
+    accounts: {},
+    shopItems: [],
+    purchases: [],
+    cases: [],
+    blackjack: {},
+    blackjackStats: {},
     meta: {},
   };
 }

@@ -7,8 +7,9 @@ import type { StoreState } from './types';
 //  Persistance
 //  - DATABASE_URL défini  -> Postgres (jsonb, persistant)
 //  - sinon                -> fichier JSON local (data/state.json)
-//  Dans les deux cas la structure Discord reste la source de vérité :
-//  l'état ne contient que la config du panel + confessions/annonces/logs.
+//
+//  L'état contient la configuration, l'économie, la boutique,
+//  les dossiers de modération et les historiques.
 // ============================================================
 
 const DATA_DIR = process.env.DATA_DIR?.trim() || path.join(process.cwd(), 'data');
@@ -41,9 +42,13 @@ export function storageKind(): 'postgres' | 'fichier json' {
   return process.env.DATABASE_URL?.trim() ? 'postgres' : 'fichier json';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function normalize(raw: unknown): StoreState {
   const base = emptyState();
-  if (!raw || typeof raw !== 'object') return base;
+  if (!isRecord(raw)) return base;
   const partial = raw as Partial<StoreState>;
   return {
     config: mergeConfig(base.config, partial.config),
@@ -52,7 +57,15 @@ function normalize(raw: unknown): StoreState {
     embeds: Array.isArray(partial.embeds) ? partial.embeds : [],
     logs: Array.isArray(partial.logs) ? partial.logs : [],
     tempRooms: Array.isArray(partial.tempRooms) ? partial.tempRooms : [],
-    meta: partial.meta && typeof partial.meta === 'object' ? partial.meta : {},
+    accounts: isRecord(partial.accounts) ? (partial.accounts as StoreState['accounts']) : {},
+    shopItems: Array.isArray(partial.shopItems) ? partial.shopItems : [],
+    purchases: Array.isArray(partial.purchases) ? partial.purchases : [],
+    cases: Array.isArray(partial.cases) ? partial.cases : [],
+    blackjack: isRecord(partial.blackjack) ? (partial.blackjack as StoreState['blackjack']) : {},
+    blackjackStats: isRecord(partial.blackjackStats)
+      ? (partial.blackjackStats as StoreState['blackjackStats'])
+      : {},
+    meta: isRecord(partial.meta) ? partial.meta : {},
   };
 }
 
@@ -149,10 +162,12 @@ export function getCachedState(): StoreState {
   return g.cache ?? emptyState();
 }
 
-/** Modifie l'état puis persiste (écritures sérialisées pour éviter les conflits). */
-export async function updateState<T>(
-  mutator: (state: StoreState) => T | Promise<T>,
-): Promise<T> {
+/**
+ * Modifie l'état puis persiste.
+ * Les écritures sont sérialisées : deux commandes simultanées ne peuvent
+ * pas s'écraser l'une l'autre sur le disque.
+ */
+export async function updateState<T>(mutator: (state: StoreState) => T | Promise<T>): Promise<T> {
   const state = await getState();
   const result = await mutator(state);
   g.cache = state;
@@ -163,11 +178,37 @@ export async function updateState<T>(
   return result;
 }
 
-/** Remet la config aux valeurs par défaut (le serveur Discord n'est pas touché). */
+/** Remet la configuration aux valeurs par défaut (aucune donnée membre n'est touchée). */
 export async function resetConfig(): Promise<void> {
   await updateState((state) => {
     const fresh = emptyState();
     state.config = fresh.config;
     state.meta = { ...state.meta };
+  });
+}
+
+/** Réinitialise uniquement une partie de la configuration. */
+export async function resetConfigSection(
+  section: 'economy' | 'blackjack' | 'shop' | 'moderation' | 'ui',
+): Promise<void> {
+  await updateState((state) => {
+    const fresh = emptyState();
+    switch (section) {
+      case 'economy':
+        state.config.economy = fresh.config.economy;
+        break;
+      case 'blackjack':
+        state.config.blackjack = fresh.config.blackjack;
+        break;
+      case 'shop':
+        state.config.shop = fresh.config.shop;
+        break;
+      case 'moderation':
+        state.config.moderation = fresh.config.moderation;
+        break;
+      case 'ui':
+        state.config.ui = fresh.config.ui;
+        break;
+    }
   });
 }

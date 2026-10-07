@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EmbedBuilder, type Guild } from 'discord.js';
 import { getState, updateState } from '../lib/store';
 import { addLog } from '../lib/logs';
-import { resolveChannelSafe } from './resolve';
+import { resolveChannelById, resolveSlotChannel } from '../lib/channels';
 import type { Announcement } from '../lib/types';
 
 // ============================================================
@@ -40,8 +40,7 @@ export function parseSchedule(input?: string | null): { date: Date | null; error
 
 export interface CreateAnnouncementInput {
   content: string;
-  channelKey: string;
-  /** salon Discord précis (prioritaire sur channelKey) */
+  /** salon Discord cible ('' = emplacement « annonces ») */
   channelId?: string | null;
   scheduledFor?: string | null;
   createdBy: string;
@@ -60,8 +59,7 @@ export async function createAnnouncement(
   const announcement: Announcement = {
     id: randomUUID(),
     content,
-    channelKey: input.channelKey,
-    channelId: input.channelId ?? undefined,
+    channelId: input.channelId ?? '',
     scheduledFor: date ? date.toISOString() : undefined,
     status: 'scheduled',
     createdAt: new Date().toISOString(),
@@ -78,7 +76,9 @@ export async function createAnnouncement(
     level: 'info',
     source: input.createdBy,
     action: date ? 'Annonce programmée' : 'Annonce créée',
-    detail: date ? `Envoi prévu le ${date.toLocaleString('fr-FR')} dans ${input.channelKey}` : `Salon ${input.channelKey}`,
+    detail: date
+      ? `Envoi prévu le ${date.toLocaleString('fr-FR')} dans <#${input.channelId || 'annonces'}>`
+      : `Salon <#${input.channelId || 'annonces'}>`,
   });
 
   return { ok: true, announcement };
@@ -102,10 +102,10 @@ async function sendAnnouncementOnce(
 ): Promise<boolean> {
   const state = await getState();
   const explicit = announcement.channelId
-    ? await guild.channels.fetch(announcement.channelId).catch(() => null)
+    ? await resolveChannelById(guild, announcement.channelId)
     : null;
-  const channel = explicit ?? (await resolveChannelSafe(guild, state.config, announcement.channelKey));
-  if (!channel?.isTextBased()) {
+  const channel = explicit ?? (await resolveSlotChannel(guild, state.config, 'announcements'));
+  if (!channel) {
     await updateState((s) => {
       const a = s.announcements.find((x) => x.id === announcement.id);
       if (a) {

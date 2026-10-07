@@ -9,7 +9,7 @@ import {
 } from 'discord.js';
 import { getState, updateState } from '../lib/store';
 import { addLog } from '../lib/logs';
-import { resolveChannelSafe } from './resolve';
+import { resolveChannelById, resolveSlotChannel } from '../lib/channels';
 import type { Confession } from '../lib/types';
 
 // ============================================================
@@ -100,8 +100,10 @@ async function postReviewCard(guild: Guild, confession: Confession): Promise<voi
   const cfg = state.config.confessions;
   if (!cfg.notifyReviewChannel) return;
 
-  const channel = await resolveChannelSafe(guild, state.config, cfg.reviewChannelKey);
-  if (!channel?.isTextBased()) return;
+  const channel =
+    (await resolveChannelById(guild, cfg.reviewChannelId)) ??
+    (await resolveSlotChannel(guild, state.config, 'confessionReview'));
+  if (!channel) return;
 
   const embed = new EmbedBuilder()
     .setColor(0xffc0cb)
@@ -150,8 +152,10 @@ export async function publishConfession(guild: Guild, confession: Confession): P
   if (current?.status === 'published' && current.publishedMessageId) return true;
   if (current?.status === 'rejected') return false;
   const cfg = state.config.confessions;
-  const channel = await resolveChannelSafe(guild, state.config, cfg.targetChannelKey);
-  if (!channel?.isTextBased()) return false;
+  const channel =
+    (await resolveChannelById(guild, cfg.targetChannelId)) ??
+    (await resolveSlotChannel(guild, state.config, 'confessions'));
+  if (!channel) return false;
 
   const target = channel as TextChannel;
   const index =

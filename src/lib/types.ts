@@ -1,114 +1,147 @@
+import type { EconomyConfig } from './economy/config';
+import type { BlackjackConfig } from './blackjack/config';
+import type { ShopConfig } from './shop/config';
+import type { ModerationConfig } from './moderation/config';
+import type { UiConfig } from './ui/config';
+
+// Les quatre grandes configurations sont décrites dans leur propre module ;
+// elles sont réexportées ici pour n'avoir qu'un seul point d'entrée.
+export type { EconomyConfig } from './economy/config';
+export type { BlackjackConfig } from './blackjack/config';
+export type { ShopConfig } from './shop/config';
+export type { ModerationConfig } from './moderation/config';
+export type { UiConfig } from './ui/config';
+
 // ============================================================
-//  Types partagés — bot Discord, panel admin et blueprint
+//  Types partagés — bot Discord, panel admin, économie, jeux,
+//  boutique et modération.
+//
+//  Le bot ne crée plus aucune structure de serveur : tous les
+//  salons utilisés sont des identifiants Discord choisis par
+//  l'administrateur (voir ChannelSlot).
 // ============================================================
 
-export type ChannelKind = 'text' | 'voice';
+// ------------------------------------------------------------
+//  Salons utilisés par le bot
+// ------------------------------------------------------------
 
-/** Un salon défini dans le blueprint (la "recette" du serveur). */
-export interface BlueprintChannel {
-  /** identifiant stable utilisé partout (config, panel, bot) */
-  key: string;
-  kind: ChannelKind;
-  /** nom de base : "chat" -> ➥ chat 💬 */
-  slug: string;
-  /** emoji final (salons texte) ou initial (salons vocaux) */
+export const CHANNEL_SLOTS = [
+  'logs',
+  'moderation',
+  'confessions',
+  'confessionReview',
+  'announcements',
+  'welcome',
+  'economy',
+  'shop',
+  'blackjack',
+  'rules',
+  'general',
+] as const;
+
+export type ChannelSlot = (typeof CHANNEL_SLOTS)[number];
+
+/** Identifiant Discord par emplacement ('' = non défini). */
+export type ChannelSlots = Record<ChannelSlot, string>;
+
+export interface ChannelSlotMeta {
+  key: ChannelSlot;
+  label: string;
   emoji: string;
-  /** nom affiché pour les vocaux ("Vocal général"). Par défaut : slug */
-  label?: string;
-  topic?: string;
-  /** limite de places (vocaux) — 0 = illimité */
-  userLimit?: number;
-  /** @everyone ne peut pas écrire */
-  readOnly?: boolean;
-  /** visible uniquement par les administrateurs */
-  adminOnly?: boolean;
-  /** salon de création automatique de vocaux (join-to-create) */
-  isHub?: boolean;
+  hint: string;
+  /** le bot peut fonctionner sans ce salon */
+  optional: boolean;
 }
 
-/** Une catégorie du blueprint. */
-export interface BlueprintCategory {
-  key: string;
-  slug: string;
-  emoji: string;
-  adminOnly?: boolean;
-  channels: BlueprintChannel[];
-}
+export const CHANNEL_SLOT_META: Record<ChannelSlot, ChannelSlotMeta> = {
+  logs: { key: 'logs', label: 'Journal du bot', emoji: '🧾', hint: 'Reçoit le journal des actions (miroir du panel).', optional: true },
+  moderation: { key: 'moderation', label: 'Modération', emoji: '🛡️', hint: 'Avertissements, dossiers et alertes d’auto-modération.', optional: true },
+  confessions: { key: 'confessions', label: 'Confessions (public)', emoji: '🤫', hint: 'Où sont publiées les confessions anonymes.', optional: true },
+  confessionReview: { key: 'confessionReview', label: 'Confessions (file d’attente)', emoji: '🗂️', hint: 'Validation des confessions par l’équipe.', optional: true },
+  announcements: { key: 'announcements', label: 'Annonces', emoji: '📣', hint: 'Cible par défaut des annonces.', optional: true },
+  welcome: { key: 'welcome', label: 'Bienvenue', emoji: '👋', hint: 'Message d’arrivée et prime d’arrivée.', optional: true },
+  economy: { key: 'economy', label: 'Économie', emoji: '💰', hint: 'Drops automatiques et annonces économiques.', optional: true },
+  shop: { key: 'shop', label: 'Boutique', emoji: '🛒', hint: 'Vitrine de la boutique (/shop vitrine).', optional: true },
+  blackjack: { key: 'blackjack', label: 'Blackjack', emoji: '🃏', hint: 'Salon conseillé pour les tables de jeu.', optional: true },
+  rules: { key: 'rules', label: 'Règlement', emoji: '📜', hint: 'Cible de /regles.', optional: true },
+  general: { key: 'general', label: 'Salon principal', emoji: '💬', hint: 'Repli pour les messages d’information.', optional: true },
+};
 
-export interface RoleConfig {
-  name: string;
-  /** couleur hexadécimale, blanc par défaut */
-  color: string;
-  hoist: boolean;
-  mentionable: boolean;
-  /** attribuer automatiquement à l'arrivée d'un membre */
-  autoAssign: boolean;
-  /** donner aussi le rôle aux membres déjà présents lors du setup */
+// ------------------------------------------------------------
+//  Accueil / rôle d'arrivée
+// ------------------------------------------------------------
+
+export interface WelcomeConfig {
+  enabled: boolean;
+  /** rôle existant attribué à l'arrivée (ID Discord) */
+  roleId: string;
+  /** salon où poster le message d'arrivée (ID Discord, vide = slot welcome) */
+  channelId: string;
+  message: string;
+  mentionMember: boolean;
+  directMessage: string;
+  /** attribuer le rôle aux membres déjà présents (bouton du panel) */
   assignToExisting: boolean;
 }
 
+// ------------------------------------------------------------
+//  Vocaux temporaires (join-to-create)
+// ------------------------------------------------------------
+
 export interface JoinToCreateConfig {
   enabled: boolean;
-  /** clé du salon hub dans le blueprint */
-  hubChannelKey: string;
-  /** catégorie où créer les salons temporaires */
-  categoryKey: string;
-  /** taille par défaut des salons créés (0 = illimité) */
+  /** salon vocal « rejoindre pour créer » (ID Discord) */
+  hubChannelId: string;
+  /** catégorie où créer les salons temporaires (ID Discord) */
+  categoryId: string;
   defaultSize: number;
-  /** supprimer le salon quand il est vide */
   autoDelete: boolean;
-  /** déplacer automatiquement l'auteur dans son salon */
   moveOwner: boolean;
-  /** un salon temporaire par membre maximum */
   onePerMember: boolean;
-  /** le propriétaire peut renommer son salon */
   allowRename: boolean;
-  /** le propriétaire peut verrouiller son salon */
   allowLock: boolean;
+  nameTemplate: string;
 }
 
 export interface ConfessionsConfig {
   enabled: boolean;
-  /** salon public où sont publiées les confessions */
-  targetChannelKey: string;
-  /** salon privé de modération (file d'attente) */
-  reviewChannelKey: string;
-  /** validation par un admin avant publication */
+  /** salon public (ID Discord) */
+  targetChannelId: string;
+  /** salon de modération (ID Discord) */
+  reviewChannelId: string;
   requireApproval: boolean;
-  /** réactions activées sous les confessions publiées */
   reactions: string[];
-  /** délai anti-spam entre deux confessions d'un même membre (secondes) */
   cooldownSeconds: number;
-  /** longueur maximale d'une confession */
   maxLength: number;
-  /** poster aussi une carte de validation dans le salon de review */
   notifyReviewChannel: boolean;
 }
 
 export interface LogsConfig {
   enabled: boolean;
-  /** salon Discord qui reçoit les logs de modération */
-  channelKey: string;
-  /** conserver les logs dans le panel */
+  /** salon Discord de miroir (ID Discord) */
+  channelId: string;
   keepInPanel: boolean;
-  /** nombre maximum de logs conservés */
   maxEntries: number;
 }
+
+// ------------------------------------------------------------
+//  Configuration globale
+// ------------------------------------------------------------
 
 export interface AppConfig {
   version: number;
   guildId: string | null;
-  /** symbole de préfixe des salons texte : ➥ */
-  prefix: string;
-  role: RoleConfig;
-  categories: BlueprintCategory[];
-  /** clé de la catégorie réservée aux admins */
-  adminCategoryKey: string;
+  channels: ChannelSlots;
+  welcome: WelcomeConfig;
   joinToCreate: JoinToCreateConfig;
   confessions: ConfessionsConfig;
   logs: LogsConfig;
-  /** exécuter le blueprint automatiquement au démarrage du bot si le serveur est vide */
-  autoSetupOnBoot: boolean;
+  economy: EconomyConfig;
+  blackjack: BlackjackConfig;
+  shop: ShopConfig;
+  moderation: ModerationConfig;
+  /** interface du bot : thème, menu central, cartes */
+  ui: UiConfig;
 }
 
 // ------------------------------------------------------------
@@ -119,18 +152,15 @@ export type ConfessionStatus = 'pending' | 'published' | 'rejected';
 
 export interface Confession {
   id: string;
-  /** id de l'auteur — jamais affiché publiquement */
   authorId: string;
   content: string;
   status: ConfessionStatus;
   createdAt: string;
   handledAt?: string;
   handledBy?: string;
-  /** id du message publié dans le salon confessions */
   publishedMessageId?: string;
   publishedChannelId?: string;
   reviewMessageId?: string;
-  /** ID du salon de review, distinct du salon public après publication. */
   reviewChannelId?: string;
   rejectionReason?: string;
 }
@@ -142,10 +172,8 @@ export interface Confession {
 export interface Announcement {
   id: string;
   content: string;
-  channelKey: string;
-  /** id Discord exact du salon (prioritaire sur channelKey s'il est défini) */
-  channelId?: string;
-  /** ISO date, vide = envoi immédiat */
+  /** ID Discord du salon cible (vide = slot annonces) */
+  channelId: string;
   scheduledFor?: string;
   status: 'scheduled' | 'sent' | 'failed' | 'cancelled';
   createdAt: string;
@@ -153,64 +181,288 @@ export interface Announcement {
   sentAt?: string;
   messageId?: string;
   error?: string;
-  /** mention @everyone / @here */
   ping?: 'none' | 'everyone' | 'here';
 }
 
 // ------------------------------------------------------------
-//  Logs
+//  Journal
 // ------------------------------------------------------------
 
-export type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'moderation';
+export type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'moderation' | 'economy';
 
 export interface LogEntry {
   id: string;
   at: string;
   level: LogLevel;
-  /** qui a déclenché l'action ("panel:username", "bot", "commande:/purge") */
   source: string;
   action: string;
   detail?: string;
 }
 
 // ------------------------------------------------------------
-//  Rapport d'exécution du blueprint
+//  Économie
 // ------------------------------------------------------------
 
-export type BlueprintStepLevel = 'created' | 'updated' | 'ok' | 'skipped' | 'error';
+export type TransactionType =
+  | 'start'
+  | 'message'
+  | 'voice'
+  | 'reaction'
+  | 'invite'
+  | 'join'
+  | 'daily'
+  | 'work'
+  | 'crime'
+  | 'rob'
+  | 'beg'
+  | 'search'
+  | 'pay-in'
+  | 'pay-out'
+  | 'drop'
+  | 'bet-win'
+  | 'bet-loss'
+  | 'shop'
+  | 'resell'
+  | 'interest'
+  | 'deposit'
+  | 'withdraw'
+  | 'admin'
+  | 'reset';
 
-export interface BlueprintStep {
-  level: BlueprintStepLevel;
-  target: string;
-  message: string;
+export interface Transaction {
+  id: string;
+  at: string;
+  type: TransactionType;
+  /** montant signé (positif = gain) */
+  amount: number;
+  /** solde total après l'opération (poche + banque) */
+  balanceAfter: number;
+  label?: string;
 }
 
-export interface BlueprintReport {
-  startedAt: string;
-  finishedAt: string;
-  dryRun: boolean;
-  steps: BlueprintStep[];
-  totals: { created: number; updated: number; ok: number; skipped: number; error: number };
+export interface InventoryItem {
+  itemId: string;
+  name: string;
+  quantity: number;
+  boughtAt: string;
+  /** fin de l'effet (absent = permanent) */
+  expiresAt?: string;
+  /** nature de l'effet appliqué tant que l'objet est en inventaire */
+  effect?: ShopItemType;
+  /** valeur de l'effet (pourcentage pour un booster, heures pour un bouclier) */
+  effectValue?: number;
+  /** prix payé, utilisé pour la revente */
+  paid?: number;
+}
+
+export interface EconomyAccount {
+  userId: string;
+  cash: number;
+  bank: number;
+  createdAt: string;
+  updatedAt: string;
+  /** jour courant au format AAAA-MM-JJ, pour les plafonds quotidiens */
+  dayStamp: string;
+  totalEarned: number;
+  totalSpent: number;
+  totalWon: number;
+  totalLost: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  bestBlackjackWin: number;
+  dailyStreak: number;
+  workStreak: number;
+  winStreak: number;
+  lossStreak: number;
+  messageStreak: number;
+  invitesRewarded: number;
+  /** plafonds quotidiens */
+  earnedFromMessagesToday: number;
+  earnedFromVoiceToday: number;
+  paidOutToday: number;
+  lostToday: number;
+  workToday: number;
+  robToday: number;
+  begToday: number;
+  cooldowns: Partial<Record<string, string>>;
+  jailUntil?: string;
+  shieldUntil?: string;
+  items: InventoryItem[];
+  history: Transaction[];
 }
 
 // ------------------------------------------------------------
-//  Salons vocaux temporaires (join-to-create)
+//  Boutique
+// ------------------------------------------------------------
+
+export const SHOP_ITEM_TYPES = ['role', 'shield', 'booster', 'collectible'] as const;
+
+export type ShopItemType = (typeof SHOP_ITEM_TYPES)[number];
+
+export const SHOP_ITEM_TYPE_LABELS: Record<ShopItemType, string> = {
+  role: 'Rôle Discord',
+  shield: 'Bouclier anti-vol',
+  booster: 'Booster de gains',
+  collectible: 'Objet de collection',
+};
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  price: number;
+  type: ShopItemType;
+  /** rôle donné si type = role */
+  roleId: string;
+  /** effet numérique pour les consommables / boosts */
+  effectValue: number;
+  /** durée d'effet en heures (0 = permanent) */
+  durationHours: number;
+  /** stock restant (-1 = illimité) */
+  stock: number;
+  /** stock initial pour le réassort automatique */
+  initialStock: number;
+  /** achats maximum par membre (0 = hérite de la config) */
+  maxPerUser: number;
+  category: string;
+  enabled: boolean;
+  position: number;
+  createdAt: string;
+}
+
+export interface ShopPurchase {
+  id: string;
+  itemId: string;
+  itemName: string;
+  userId: string;
+  price: number;
+  tax: number;
+  at: string;
+}
+
+// ------------------------------------------------------------
+//  Blackjack
+// ------------------------------------------------------------
+
+export type Suit = 'S' | 'H' | 'D' | 'C';
+export type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
+
+export interface Card {
+  rank: Rank;
+  suit: Suit;
+}
+
+export interface BlackjackHand {
+  cards: Card[];
+  bet: number;
+  sideBet: number;
+  stood: boolean;
+  doubled: boolean;
+  busted: boolean;
+  blackjack: boolean;
+  surrendered: boolean;
+  /** index de la main d'origine pour les splits d'as */
+  fromSplit?: number;
+}
+
+export type BlackjackStatus = 'insurance' | 'playing' | 'finished' | 'abandoned';
+
+export interface BlackjackGame {
+  id: string;
+  guildId: string;
+  userId: string;
+  channelId: string;
+  messageId?: string;
+  shoe: Card[];
+  drawIndex: number;
+  hands: BlackjackHand[];
+  activeHand: number;
+  splitsUsed: number;
+  dealer: Card[];
+  holeRevealed: boolean;
+  insuranceBet: number;
+  insuranceResolved: boolean;
+  baseBet: number;
+  sideBet: number;
+  status: BlackjackStatus;
+  createdAt: number;
+  updatedAt: number;
+  timeoutAt: number;
+  firstAction: boolean;
+  /** résultat consolidé une fois la partie terminée */
+  result?: {
+    outcome: 'win' | 'lose' | 'push' | 'blackjack' | 'bust' | 'surrender';
+    net: number;
+    summary: string;
+  };
+}
+
+export interface BlackjackStats {
+  hands: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  blackjacks: number;
+  wagered: number;
+  returned: number;
+  biggestWin: number;
+  bestStreak: number;
+}
+
+// ------------------------------------------------------------
+//  Modération
+// ------------------------------------------------------------
+
+export type ModCaseType =
+  | 'warn'
+  | 'timeout'
+  | 'untimeout'
+  | 'kick'
+  | 'ban'
+  | 'unban'
+  | 'softban'
+  | 'note'
+  | 'automod';
+
+export interface ModCase {
+  id: string;
+  number: number;
+  type: ModCaseType;
+  guildId: string;
+  userId: string;
+  userName: string;
+  moderatorId: string;
+  moderatorName: string;
+  reason: string;
+  createdAt: string;
+  expiresAt?: string;
+  /** false quand le dossier a été retiré */
+  active: boolean;
+  revokedAt?: string;
+  revokedBy?: string;
+  /** vrai si le MP de notification a bien été envoyé */
+  directMessageSent?: boolean;
+  /** sanction automatique déclenchée par ce dossier */
+  autoAction?: string;
+  channelId?: string;
+}
+
+// ------------------------------------------------------------
+//  Salons vocaux temporaires
 // ------------------------------------------------------------
 
 export interface TempRoom {
   channelId: string;
   ownerId: string;
   createdAt: string;
-  /** salon verrouillé par son propriétaire */
   locked: boolean;
-  /** membres explicitement autorisés */
   allowed: string[];
-  /** membres explicitement exclus */
   denied: string[];
 }
 
 // ------------------------------------------------------------
-//  État persistant
+//  Embeds personnalisés
 // ------------------------------------------------------------
 
 export interface EmbedField {
@@ -219,7 +471,6 @@ export interface EmbedField {
   inline?: boolean;
 }
 
-/** Embed enregistrée comme modèle dans le panel ou via Discord. */
 export interface EmbedTemplate {
   id: string;
   name: string;
@@ -235,21 +486,15 @@ export interface EmbedTemplate {
   imageUrl?: string;
   thumbnailUrl?: string;
   fields: EmbedField[];
-  /** Salon par défaut pour la publication, si choisi. */
   channelId?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
 }
 
-export interface BlueprintResourceIds {
-  roleId?: string;
-  categoryIds: Record<string, string>;
-  channelIds: Record<string, string>;
-  /** Clés dont les permission overwrites ont été posées par le blueprint. */
-  managedCategoryOverwrites: string[];
-  managedChannelOverwrites: string[];
-}
+// ------------------------------------------------------------
+//  État persistant
+// ------------------------------------------------------------
 
 export interface StoreState {
   config: AppConfig;
@@ -258,18 +503,35 @@ export interface StoreState {
   embeds: EmbedTemplate[];
   logs: LogEntry[];
   tempRooms: TempRoom[];
+  /** comptes d'économie indexés par identifiant Discord */
+  accounts: Record<string, EconomyAccount>;
+  /** articles de la boutique */
+  shopItems: ShopItem[];
+  /** derniers achats (historique borné) */
+  purchases: ShopPurchase[];
+  /** dossiers de modération */
+  cases: ModCase[];
+  /** parties de blackjack en cours, indexées par membre */
+  blackjack: Record<string, BlackjackGame>;
+  /** statistiques blackjack par membre */
+  blackjackStats: Record<string, BlackjackStats>;
   meta: {
-    lastSetupAt?: string;
-    lastSetupBy?: string;
-    blueprintReport?: BlueprintReport;
     botTag?: string;
-    /** IDs des ressources gérées, indexés par serveur puis clé de blueprint. */
-    blueprintResources?: Record<string, BlueprintResourceIds>;
+    nextCaseNumber?: number;
+    lastInterestAt?: string;
+    lastRestockAt?: string;
+    lastRichestRoleId?: string;
+    lastRichestRoleAt?: string;
+    lastDropAt?: string;
+    activeDrop?: { amount: number; channelId: string; messageId?: string; expiresAt: string; claimedBy?: string };
+    installedAt?: string;
+    /** sabot de blackjack partagé, indexé par serveur (pénétration réaliste) */
+    shoes?: Record<string, { cards: Card[]; index: number }>;
   };
 }
 
 // ------------------------------------------------------------
-//  Retour des actions du panel (server actions)
+//  Retour des actions du panel
 // ------------------------------------------------------------
 
 export interface ActionState {

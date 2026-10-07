@@ -40,7 +40,7 @@ export function ActionForm({
   footer,
 }: {
   action: FormAction;
-  children: ReactNode;
+  children?: ReactNode;
   submitLabel?: string;
   className?: string;
   pendingLabel?: string;
