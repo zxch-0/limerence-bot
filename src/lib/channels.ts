@@ -19,6 +19,36 @@ export function slotChannelId(config: AppConfig, slot: ChannelSlot): string {
   return typeof value === 'string' && /^\d{15,25}$/.test(value) ? value : '';
 }
 
+/** Destination explicite d'une fonctionnalité, sinon son emplacement partagé. */
+export function effectiveSlotChannelId(config: AppConfig, slot: ChannelSlot): string {
+  let explicit = '';
+  switch (slot) {
+    case 'welcome': explicit = config.welcome.channelId; break;
+    case 'confessions': explicit = config.confessions.targetChannelId; break;
+    case 'confessionReview': explicit = config.confessions.reviewChannelId; break;
+    case 'logs': explicit = config.logs.channelId; break;
+  }
+  const id = explicit.trim();
+  return /^\d{15,25}$/.test(id) ? id : slotChannelId(config, slot);
+}
+
+/**
+ * Change un emplacement et synchronise les destinations explicites historiques.
+ * Ne change ni l'activation des fonctions ni les restrictions de commandes.
+ */
+export function setSlotChannel(config: AppConfig, slot: ChannelSlot, channelId: string): void {
+  if (channelId !== '' && !/^\d{15,25}$/.test(channelId)) {
+    throw new Error('Identifiant de salon invalide.');
+  }
+  config.channels[slot] = channelId;
+  switch (slot) {
+    case 'welcome': config.welcome.channelId = channelId; break;
+    case 'confessions': config.confessions.targetChannelId = channelId; break;
+    case 'confessionReview': config.confessions.reviewChannelId = channelId; break;
+    case 'logs': config.logs.channelId = channelId; break;
+  }
+}
+
 export function slotConfigured(config: AppConfig, slot: ChannelSlot): boolean {
   return slotChannelId(config, slot) !== '';
 }
@@ -42,7 +72,7 @@ export function resolveSlotFromCache(
   config: AppConfig,
   slot: ChannelSlot,
 ): GuildTextBasedChannel | null {
-  const channel = fromCache(guild, slotChannelId(config, slot));
+  const channel = fromCache(guild, effectiveSlotChannelId(config, slot));
   return isSendable(channel) ? channel : null;
 }
 
@@ -67,7 +97,7 @@ export async function resolveSlotChannel(
   slot: ChannelSlot,
   options: ResolveSlotOptions = {},
 ): Promise<GuildTextBasedChannel | null> {
-  const id = slotChannelId(config, slot);
+  const id = effectiveSlotChannelId(config, slot);
   if (id) {
     const cached = fromCache(guild, id);
     if (isSendable(cached)) return cached;

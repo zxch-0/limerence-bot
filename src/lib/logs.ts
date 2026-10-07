@@ -50,7 +50,6 @@ const ICONS: Record<LogLevel, string> = {
 async function mirrorToDiscord(entry: LogEntry): Promise<void> {
   const state = await getState();
   if (!state.config.logs.enabled) return;
-  if (!state.config.logs.channelId) return;
 
   const { getReadyClient } = await import('./discord/client');
   const client = getReadyClient();

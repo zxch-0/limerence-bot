@@ -15,7 +15,7 @@ dans le panel, et il apporte tout le reste :
 - 🎨 un **système d'interface unifié** : thème, menu central `/panel` et cartes par section —
   **41 options**.
 
-**314 options** au total, **48 commandes slash**, et un seul service à déployer : le bot et le panel
+**314 options** au total, **49 commandes slash**, et un seul service à déployer : le bot et le panel
 tournent dans le même process Node (plan gratuit Render possible).
 
 ---
@@ -242,13 +242,13 @@ La suite de tests (`tests/`) couvre la logique métier pure : 79 assertions rép
 normalisation des configurations, l'économie (gains, plafonds, intérêts, transferts), le règlement du
 blackjack (payouts, assurance, partage, taxes), la boutique (achats, stock, revente, réassort), la
 modération (dossiers, paliers, auto-modération, MP de sanction), la persistance et l'intégrité des
-48 commandes slash.
+49 commandes slash.
 
 ---
 
 ## 9. Commandes Discord
 
-**48 commandes** enregistrées au démarrage.
+**49 commandes** enregistrées au démarrage.
 
 ### Économie & jeux (15)
 
@@ -266,11 +266,37 @@ liens, pieces-jointes, embeds, mentions, tout) · `/lock` · `/unlock` · `/lock
 `/banlist` · `/antiraid` (statut, activer, desactiver) · `/economie` (donner, retirer, definir, reset,
 etat) · `/aide`
 
-### Communauté & vocal (8)
+### Communauté & vocal (9)
 
 `/confession` · `/annonce` · `/annonces` (liste, annuler) · `/embed` (creer, liste, publier, modifier,
 supprimer) · `/regles` · `/vocal` (renommer, limite, verrouiller, autoriser, expulser, transferer,
-supprimer, reclamer) · `/panel` · `/ping`
+supprimer, reclamer) · `/panel` · `/ping` · `/config` (voir, salon, supprimer)
+
+---
+
+### Configurer les salons directement dans Discord
+
+La commande `/config` est réservée aux administrateurs et aux membres ayant **Gérer le serveur**
+(ainsi qu’aux IDs autorisés dans l’environnement), et s’utilise sur le serveur cible du bot.
+
+- `/config voir` : affiche les destinations actuelles.
+- `/config salon categorie:Économie salon:#economie` : choisit le salon des drops et annonces économiques.
+- `/config salon categorie:Annonces salon:#annonces` : définit la destination par défaut des annonces.
+- `/config supprimer categorie:Économie` : retire l’association, sans supprimer le salon Discord.
+
+Toutes les catégories du panel sont disponibles : économie, boutique, blackjack, annonces,
+bienvenue, modération, journal, confessions publiques, file de validation, règlement et salon principal.
+Les changements sont persistés dans le même magasin que le panel et appliqués sans redémarrage.
+Le bot vérifie qu’il peut voir le salon, envoyer des messages et intégrer des liens.
+
+**Attention :** retirer une association ne désactive pas la fonctionnalité ; les replis existants
+restent actifs et peuvent envoyer les messages dans un autre salon. La commande ne change ni les
+mentions (`@everyone`, `@here`, membres), ni les activations, ni les restrictions de commandes
+économiques/blackjack : ces options restent dans le panel. Les annonces ayant une destination
+explicite gardent cette destination.
+
+Après déploiement de cette mise à jour, redémarre le bot (ou utilise le bouton de synchronisation
+du panel) pour enregistrer la nouvelle commande auprès de Discord.
 
 ---
 

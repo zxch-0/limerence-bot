@@ -6,6 +6,7 @@ import {
   type SlashCommandOptionsOnlyBuilder,
   type SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
+import { CHANNEL_SLOTS, CHANNEL_SLOT_META } from '../lib/types';
 
 // ============================================================
 //  Définition des commandes slash
@@ -442,7 +443,37 @@ export function moderationCommands(): CommandDefinition[] {
 // ------------------------------------------------------------
 
 export function utilityCommands(): CommandDefinition[] {
+  const channelChoices = CHANNEL_SLOTS.map((slot) => ({
+    name: `${CHANNEL_SLOT_META[slot].emoji} ${CHANNEL_SLOT_META[slot].label}`,
+    value: slot,
+  }));
+
   return [
+    new SlashCommandBuilder()
+      .setName('config')
+      .setDescription('Gérer les salons des notifications et publications du bot')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .setDMPermission(false)
+      .addSubcommand((s) => s.setName('voir').setDescription('Voir les salons utilisés par le bot'))
+      .addSubcommand((s) =>
+        s
+          .setName('salon')
+          .setDescription('Choisir le salon d’une catégorie de notifications')
+          .addStringOption((o) =>
+            o.setName('categorie').setDescription('Fonction du bot').setRequired(true).addChoices(...channelChoices),
+          )
+          .addChannelOption((o) =>
+            textChannel(o.setName('salon').setDescription('Salon de destination').setRequired(true)),
+          ),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('supprimer')
+          .setDescription('Retirer le salon associé à une catégorie (les replis restent actifs)')
+          .addStringOption((o) =>
+            o.setName('categorie').setDescription('Fonction du bot').setRequired(true).addChoices(...channelChoices),
+          ),
+      ),
     new SlashCommandBuilder()
       .setName('confession')
       .setDescription('Envoie une confession 100 % anonyme')
