@@ -25,6 +25,14 @@ export const ECONOMY_SECTIONS = [
   { id: 'pay', label: 'Transferts', emoji: '💸', description: '/pay : envoyer de l’argent à un membre, taxe et plafonds.' },
   { id: 'drops', label: 'Drops', emoji: '🎁', description: 'Cagnottes lâchées automatiquement dans un salon.' },
   { id: 'gambling', label: 'Paris', emoji: '🎲', description: 'Règles communes à tous les jeux d’argent (blackjack inclus).' },
+  { id: 'income', label: 'Rôles de revenu', emoji: '💼', description: 'Rôles achetés en boutique qui génèrent un revenu passif (/income).' },
+  { id: 'progression', label: 'XP & niveaux', emoji: '📈', description: 'Expérience, niveaux et bonus de gains.' },
+  { id: 'prestige', label: 'Prestige', emoji: '🌟', description: 'Recommencer plus fort contre un bonus permanent.' },
+  { id: 'quests', label: 'Quêtes', emoji: '🎯', description: 'Quêtes quotidiennes communes à tout le serveur.' },
+  { id: 'lottery', label: 'Loterie', emoji: '🎟️', description: 'Tickets, cagnotte progressive et tirages automatiques.' },
+  { id: 'market', label: 'Bourse', emoji: '📊', description: 'Actions fictives dont les cours fluctuent en continu.' },
+  { id: 'rewards', label: 'Roue & coffres', emoji: '🎁', description: 'Roue de la fortune gratuite et coffres à ouvrir.' },
+  { id: 'achievements', label: 'Succès', emoji: '🏅', description: 'Succès déblocables automatiquement avec récompenses.' },
   { id: 'leaderboard', label: 'Classement & rôles', emoji: '🏆', description: 'Top des membres et rôle du plus riche.' },
   { id: 'security', label: 'Sécurité & historique', emoji: '🔒', description: 'Anti-abus, journal des transactions, comptes fantômes.' },
 ] as const satisfies readonly SectionDef[];
@@ -192,6 +200,64 @@ export const ECONOMY_FIELDS = [
   { key: 'betAllowedChannels', label: 'Salons de jeu autorisés (vide = partout)', kind: 'channel', section: 'gambling', maxItems: 15 },
   { key: 'dailyLossLimitEnabled', label: 'Limiter les pertes quotidiennes', kind: 'boolean', section: 'gambling' },
   { key: 'dailyLossLimit', label: 'Perte maximale par jour (0 = illimité)', kind: 'integer', section: 'gambling', min: 0, max: 100_000_000 },
+
+  // ---------- Rôles de revenu ----------
+  { key: 'incomeEnabled', label: 'Activer les revenus de rôles', kind: 'boolean', section: 'income', hint: 'Les articles « Rôle de revenu » de la boutique génèrent un revenu passif.' },
+  { key: 'incomeMaxAccruedHours', label: 'Revenu accumulable au maximum (heures)', kind: 'hours', section: 'income', min: 1, max: 8760, dependsOn: 'incomeEnabled' },
+
+  // ---------- XP & niveaux ----------
+  { key: 'xpEnabled', label: 'Activer l’expérience (XP)', kind: 'boolean', section: 'progression' },
+  { key: 'xpPerAmount', label: 'Pièces gagnées pour 1 XP', kind: 'integer', section: 'progression', min: 1, max: 1_000_000, dependsOn: 'xpEnabled' },
+  { key: 'levelBonusPercent', label: 'Bonus de gains par niveau (%)', kind: 'percent', section: 'progression', min: 0, max: 100, dependsOn: 'xpEnabled' },
+  { key: 'levelBonusMaxPercent', label: 'Bonus de niveau plafonné à (%)', kind: 'percent', section: 'progression', min: 0, max: 500, dependsOn: 'xpEnabled' },
+  { key: 'levelReward', label: 'Récompense par niveau gagné', kind: 'integer', section: 'progression', min: 0, max: 1_000_000, dependsOn: 'xpEnabled' },
+  { key: 'levelUpAnnounce', label: 'Annoncer les montées de niveau', kind: 'boolean', section: 'progression', dependsOn: 'xpEnabled' },
+
+  // ---------- Prestige ----------
+  { key: 'prestigeEnabled', label: 'Activer le prestige', kind: 'boolean', section: 'prestige' },
+  { key: 'prestigeMinTotal', label: 'Fortune minimale pour prestigier', kind: 'integer', section: 'prestige', min: 1, max: 1_000_000_000, dependsOn: 'prestigeEnabled' },
+  { key: 'prestigeBonusPercent', label: 'Bonus de gains par niveau de prestige (%)', kind: 'percent', section: 'prestige', min: 0, max: 100, dependsOn: 'prestigeEnabled' },
+
+  // ---------- Quêtes ----------
+  { key: 'questsEnabled', label: 'Activer les quêtes quotidiennes', kind: 'boolean', section: 'quests' },
+  { key: 'questsPerDay', label: 'Quêtes par jour et par membre', kind: 'integer', section: 'quests', min: 1, max: 10, dependsOn: 'questsEnabled' },
+  { key: 'questRewardMin', label: 'Récompense minimum d’une quête', kind: 'integer', section: 'quests', min: 0, max: 1_000_000, dependsOn: 'questsEnabled' },
+  { key: 'questRewardMax', label: 'Récompense maximum d’une quête', kind: 'integer', section: 'quests', min: 0, max: 1_000_000, dependsOn: 'questsEnabled' },
+  { key: 'questXpReward', label: 'XP offerte par quête complétée', kind: 'integer', section: 'quests', min: 0, max: 100_000, dependsOn: 'questsEnabled' },
+
+  // ---------- Loterie ----------
+  { key: 'lotteryEnabled', label: 'Activer la loterie', kind: 'boolean', section: 'lottery' },
+  { key: 'lotteryTicketPrice', label: 'Prix d’un ticket', kind: 'integer', section: 'lottery', min: 1, max: 1_000_000, dependsOn: 'lotteryEnabled' },
+  { key: 'lotteryDrawEveryHours', label: 'Tirage toutes les X heures', kind: 'hours', section: 'lottery', min: 1, max: 168, dependsOn: 'lotteryEnabled' },
+  { key: 'lotteryJackpotPercent', label: 'Part des mises alimentant le jackpot (%)', kind: 'percent', section: 'lottery', min: 1, max: 100, dependsOn: 'lotteryEnabled' },
+  { key: 'lotteryAnnounce', label: 'Annoncer les tirages et les gagnants', kind: 'boolean', section: 'lottery', dependsOn: 'lotteryEnabled' },
+
+  // ---------- Bourse ----------
+  { key: 'marketEnabled', label: 'Activer la bourse', kind: 'boolean', section: 'market' },
+  { key: 'marketTickMinutes', label: 'Fluctuation des cours toutes les X minutes', kind: 'minutes', section: 'market', min: 1, max: 1440, dependsOn: 'marketEnabled' },
+  { key: 'marketVolatilityPercent', label: 'Volatilité maximale par fluctuation (%)', kind: 'percent', section: 'market', min: 0, max: 100, dependsOn: 'marketEnabled' },
+  { key: 'marketFeePercent', label: 'Frais d’achat/vente (%)', kind: 'percent', section: 'market', min: 0, max: 20, dependsOn: 'marketEnabled' },
+  { key: 'marketSymbols', label: 'Actions disponibles (SYMBOLE:prix de départ)', kind: 'list', section: 'market', maxItems: 12, dependsOn: 'marketEnabled' },
+
+  // ---------- Roue & coffres ----------
+  { key: 'spinEnabled', label: 'Activer la roue de la fortune (/spin)', kind: 'boolean', section: 'rewards' },
+  { key: 'spinCooldownHours', label: 'Délai entre deux tours de roue (heures)', kind: 'hours', section: 'rewards', min: 1, max: 168, dependsOn: 'spinEnabled' },
+  { key: 'spinMin', label: 'Gain minimum de la roue', kind: 'integer', section: 'rewards', min: 0, max: 1_000_000, dependsOn: 'spinEnabled' },
+  { key: 'spinMax', label: 'Gain maximum de la roue', kind: 'integer', section: 'rewards', min: 0, max: 1_000_000, dependsOn: 'spinEnabled' },
+  { key: 'spinJackpotAmount', label: 'Jackpot de la roue', kind: 'integer', section: 'rewards', min: 0, max: 100_000_000, dependsOn: 'spinEnabled' },
+  { key: 'spinJackpotChancePercent', label: 'Chance de jackpot (%)', kind: 'percent', section: 'rewards', min: 0, max: 100, dependsOn: 'spinEnabled' },
+  { key: 'cratesEnabled', label: 'Activer les coffres (/coffre)', kind: 'boolean', section: 'rewards' },
+  { key: 'cratesDailyFree', label: 'Coffres gratuits par jour', kind: 'integer', section: 'rewards', min: 0, max: 10, dependsOn: 'cratesEnabled' },
+  { key: 'crateMin', label: 'Gain minimum d’un coffre', kind: 'integer', section: 'rewards', min: 0, max: 1_000_000, dependsOn: 'cratesEnabled' },
+  { key: 'crateMax', label: 'Gain maximum d’un coffre', kind: 'integer', section: 'rewards', min: 0, max: 1_000_000, dependsOn: 'cratesEnabled' },
+  { key: 'crateXp', label: 'XP offerte par coffre ouvert', kind: 'integer', section: 'rewards', min: 0, max: 100_000, dependsOn: 'cratesEnabled' },
+  { key: 'crateJackpotAmount', label: 'Jackpot d’un coffre', kind: 'integer', section: 'rewards', min: 0, max: 100_000_000, dependsOn: 'cratesEnabled' },
+  { key: 'crateJackpotChancePercent', label: 'Chance de jackpot par coffre (%)', kind: 'percent', section: 'rewards', min: 0, max: 100, dependsOn: 'cratesEnabled' },
+
+  // ---------- Succès ----------
+  { key: 'achievementsEnabled', label: 'Activer les succès', kind: 'boolean', section: 'achievements' },
+  { key: 'achievementReward', label: 'Récompense par succès débloqué', kind: 'integer', section: 'achievements', min: 0, max: 1_000_000, dependsOn: 'achievementsEnabled' },
+  { key: 'achievementXp', label: 'XP offerte par succès débloqué', kind: 'integer', section: 'achievements', min: 0, max: 100_000, dependsOn: 'achievementsEnabled' },
 
   // ---------- Classement ----------
   { key: 'leaderboardEnabled', label: 'Activer le classement', kind: 'boolean', section: 'leaderboard' },
@@ -383,6 +449,64 @@ export const DEFAULT_ECONOMY_CONFIG: EconomyConfig = {
   betAllowedChannels: [],
   dailyLossLimitEnabled: false,
   dailyLossLimit: 0,
+
+  // Rôles de revenu
+  incomeEnabled: true,
+  incomeMaxAccruedHours: 168,
+
+  // XP & niveaux
+  xpEnabled: true,
+  xpPerAmount: 100,
+  levelBonusPercent: 0.5,
+  levelBonusMaxPercent: 25,
+  levelReward: 100,
+  levelUpAnnounce: true,
+
+  // Prestige
+  prestigeEnabled: true,
+  prestigeMinTotal: 1_000_000,
+  prestigeBonusPercent: 2,
+
+  // Quêtes
+  questsEnabled: true,
+  questsPerDay: 3,
+  questRewardMin: 200,
+  questRewardMax: 800,
+  questXpReward: 50,
+
+  // Loterie
+  lotteryEnabled: true,
+  lotteryTicketPrice: 100,
+  lotteryDrawEveryHours: 24,
+  lotteryJackpotPercent: 50,
+  lotteryAnnounce: true,
+
+  // Bourse
+  marketEnabled: true,
+  marketTickMinutes: 30,
+  marketVolatilityPercent: 10,
+  marketFeePercent: 1,
+  marketSymbols: ['LMC:100', 'DSO:250', 'CRY:80', 'GLD:500', 'NEB:150', 'VOX:60'],
+
+  // Roue & coffres
+  spinEnabled: true,
+  spinCooldownHours: 20,
+  spinMin: 50,
+  spinMax: 500,
+  spinJackpotAmount: 10_000,
+  spinJackpotChancePercent: 2,
+  cratesEnabled: true,
+  cratesDailyFree: 1,
+  crateMin: 25,
+  crateMax: 250,
+  crateXp: 25,
+  crateJackpotAmount: 5_000,
+  crateJackpotChancePercent: 5,
+
+  // Succès
+  achievementsEnabled: true,
+  achievementReward: 100,
+  achievementXp: 50,
 
   // Classement
   leaderboardEnabled: true,

@@ -3,14 +3,16 @@ import type { BlackjackConfig } from './blackjack/config';
 import type { ShopConfig } from './shop/config';
 import type { ModerationConfig } from './moderation/config';
 import type { UiConfig } from './ui/config';
+import type { GamesConfig } from './games/config';
 
-// Les quatre grandes configurations sont décrites dans leur propre module ;
+// Les cinq grandes configurations sont décrites dans leur propre module ;
 // elles sont réexportées ici pour n'avoir qu'un seul point d'entrée.
 export type { EconomyConfig } from './economy/config';
 export type { BlackjackConfig } from './blackjack/config';
 export type { ShopConfig } from './shop/config';
 export type { ModerationConfig } from './moderation/config';
 export type { UiConfig } from './ui/config';
+export type { GamesConfig } from './games/config';
 
 // ============================================================
 //  Types partagés — bot Discord, panel admin, économie, jeux,
@@ -138,6 +140,8 @@ export interface AppConfig {
   logs: LogsConfig;
   economy: EconomyConfig;
   blackjack: BlackjackConfig;
+  /** casino : roulette, coinflip, dés, slots, mines, crash, plinko */
+  games: GamesConfig;
   shop: ShopConfig;
   moderation: ModerationConfig;
   /** interface du bot : thème, menu central, cartes */
@@ -221,6 +225,17 @@ export type TransactionType =
   | 'drop'
   | 'bet-win'
   | 'bet-loss'
+  | 'game'
+  | 'income'
+  | 'quest'
+  | 'lottery'
+  | 'jackpot'
+  | 'stock'
+  | 'spin'
+  | 'crate'
+  | 'prestige'
+  | 'achievement'
+  | 'levelup'
   | 'shop'
   | 'resell'
   | 'interest'
@@ -289,18 +304,150 @@ export interface EconomyAccount {
   shieldUntil?: string;
   items: InventoryItem[];
   history: Transaction[];
+  // ---------- progression (XP, niveaux, prestige) ----------
+  xp: number;
+  level: number;
+  prestige: number;
+  /** dernier montant d'XP gagné (pour l'affichage) */
+  // ---------- revenus des rôles achetés ----------
+  incomeTotal: number;
+  lastIncomeClaimAt?: string;
+  // ---------- quêtes du jour ----------
+  questProgress: Record<string, number>;
+  // ---------- loterie ----------
+  lotteryTickets: number;
+  jackpotWins: number;
+  // ---------- bourse ----------
+  stocks: Record<string, StockHolding>;
+  marketProfit: number;
+  // ---------- extras (roue, coffres) ----------
+  crates: number;
+  cratesOpened: number;
+  spinsCount: number;
+  lastFreeCrateAt?: string;
+  // ---------- succès ----------
+  achievements: string[];
 }
+
+export interface StockHolding {
+  symbol: string;
+  /** quantité détenue (peut être fractionnaire) */
+  qty: number;
+  /** montant total investi (pour le P&L) */
+  invested: number;
+}
+
+// ------------------------------------------------------------
+//  Quêtes quotidiennes
+// ------------------------------------------------------------
+
+export type QuestType =
+  | 'play_games'
+  | 'win_games'
+  | 'gain_money'
+  | 'spend_money'
+  | 'work'
+  | 'crime'
+  | 'rob'
+  | 'daily'
+  | 'search'
+  | 'income';
+
+export interface QuestDef {
+  id: string;
+  type: QuestType;
+  target: number;
+  label: string;
+  emoji: string;
+  reward: number;
+  xp: number;
+}
+
+export interface QuestDay {
+  dayStamp: string;
+  quests: QuestDef[];
+}
+
+// ------------------------------------------------------------
+//  Loterie
+// ------------------------------------------------------------
+
+export interface LotteryDraw {
+  id: string;
+  at: string;
+  winnerId: string | null;
+  amount: number;
+  tickets: number;
+}
+
+export interface LotteryState {
+  /** cagnotte progressive : une part des mises alimente le jackpot */
+  jackpot: number;
+  tickets: Record<string, number>;
+  lastDrawAt?: string;
+  history: LotteryDraw[];
+}
+
+// ------------------------------------------------------------
+//  Bourse (actions fictives)
+// ------------------------------------------------------------
+
+export interface MarketState {
+  prices: Record<string, number>;
+  /** historique borné des cours (50 derniers points par symbole) */
+  history: Record<string, number[]>;
+  lastTickAt?: string;
+}
+
+// ------------------------------------------------------------
+//  Parties interactives en cours (mines, crash)
+// ------------------------------------------------------------
+
+export interface MinesSession {
+  kind: 'mines';
+  userId: string;
+  guildId: string;
+  channelId: string;
+  messageId?: string;
+  bet: number;
+  mines: number;
+  /** true = mine à cette position */
+  grid: boolean[];
+  revealed: number[];
+  cashedOut: boolean;
+  finished: boolean;
+  createdAt: number;
+  timeoutAt: number;
+}
+
+export interface CrashSession {
+  kind: 'crash';
+  userId: string;
+  guildId: string;
+  channelId: string;
+  messageId?: string;
+  bet: number;
+  /** multiplicateur auquel la fusée explose (décidé à l'avance) */
+  crashAt: number;
+  startedAt: number;
+  cashedOut: boolean;
+  finished: boolean;
+  timeoutAt: number;
+}
+
+export type GameSession = MinesSession | CrashSession;
 
 // ------------------------------------------------------------
 //  Boutique
 // ------------------------------------------------------------
 
-export const SHOP_ITEM_TYPES = ['role', 'shield', 'booster', 'collectible'] as const;
+export const SHOP_ITEM_TYPES = ['role', 'income', 'shield', 'booster', 'collectible'] as const;
 
 export type ShopItemType = (typeof SHOP_ITEM_TYPES)[number];
 
 export const SHOP_ITEM_TYPE_LABELS: Record<ShopItemType, string> = {
   role: 'Rôle Discord',
+  income: 'Rôle de revenu',
   shield: 'Bouclier anti-vol',
   booster: 'Booster de gains',
   collectible: 'Objet de collection',
@@ -527,6 +674,14 @@ export interface StoreState {
     installedAt?: string;
     /** sabot de blackjack partagé, indexé par serveur (pénétration réaliste) */
     shoes?: Record<string, { cards: Card[]; index: number }>;
+    /** loterie : cagnotte progressive et tickets des membres */
+    lottery?: LotteryState;
+    /** bourse : cours courants et historique borné */
+    market?: MarketState;
+    /** quêtes du jour (mêmes pour tout le serveur) */
+    quests?: QuestDay;
+    /** parties interactives en cours (mines, crash), indexées par membre */
+    gameSessions?: Record<string, GameSession>;
   };
 }
 

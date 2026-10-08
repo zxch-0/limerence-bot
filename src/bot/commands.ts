@@ -30,6 +30,10 @@ import { handleEconomyCommand, handleEconomyAdminCommand } from './economy';
 import { handleBlackjackCommand } from './blackjack';
 import { accentColor, uiView } from './ui';
 import { handleShopCommand } from './shop';
+import { handleCasinoCommand, handleGamesCommand, handleMinesCommand, handleCrashCommand } from './games';
+import { handleEcoCommand } from './menu';
+import { handleJobsCommand, handleIncomeCommand } from './income';
+import { handleFeaturesCommand } from './features';
 import { handleModerationCommand } from './moderationCommands';
 import { handleConfigCommand } from './config';
 import {
@@ -132,6 +136,66 @@ export async function handleChatInput(
       return;
     }
     await handleEconomyAdminCommand(interaction);
+    return;
+  }
+
+  // ---- casino & fonctionnalités économiques ----
+  const CASINO_GAMES = new Set(['roulette', 'coinflip', 'dice', 'slots', 'plinko']);
+  const ECO_FEATURES = new Set([
+    'casino',
+    'eco',
+    'jobs',
+    'income',
+    'quetes',
+    'loterie',
+    'bourse',
+    'spin',
+    'coffre',
+    'prestige',
+    'succes',
+    'mines',
+    'crash',
+  ]);
+  if (CASINO_GAMES.has(name) || ECO_FEATURES.has(name)) {
+    const economy = config.economy;
+    if (economy.economyChannelOnly && economy.economyAllowedChannels.length) {
+      if (!economy.economyAllowedChannels.includes(interaction.channelId)) {
+        await interaction.reply({
+          content: `💰 Ces commandes sont réservées à : ${economy.economyAllowedChannels.map((id) => `<#${id}>`).join(' ')}`,
+          ...ephemOf(interaction),
+        });
+        return;
+      }
+    }
+    if (name === 'casino') {
+      await handleCasinoCommand(interaction);
+      return;
+    }
+    if (name === 'eco') {
+      await handleEcoCommand(interaction);
+      return;
+    }
+    if (name === 'jobs') {
+      await handleJobsCommand(interaction);
+      return;
+    }
+    if (name === 'income') {
+      await handleIncomeCommand(interaction);
+      return;
+    }
+    if (CASINO_GAMES.has(name)) {
+      await handleGamesCommand(interaction, name);
+      return;
+    }
+    if (name === 'mines') {
+      await handleMinesCommand(interaction);
+      return;
+    }
+    if (name === 'crash') {
+      await handleCrashCommand(interaction);
+      return;
+    }
+    await handleFeaturesCommand(interaction, name);
     return;
   }
 

@@ -71,7 +71,41 @@ export function createAccount(userId: string, config: EconomyConfig, now: Date =
     cooldowns: {},
     items: [],
     history: [],
+    xp: 0,
+    level: 1,
+    prestige: 0,
+    incomeTotal: 0,
+    questProgress: {},
+    lotteryTickets: 0,
+    jackpotWins: 0,
+    stocks: {},
+    marketProfit: 0,
+    crates: 0,
+    cratesOpened: 0,
+    spinsCount: 0,
+    achievements: [],
   };
+}
+
+/**
+ * Complète un compte chargé depuis une version précédente du bot : les champs
+ * ajoutés plus tard (XP, quêtes, bourse, succès…) reçoivent leur valeur par
+ * défaut. Sans cela, un ancien compte ferait échouer les nouvelles commandes.
+ */
+export function hydrateAccount(account: EconomyAccount): EconomyAccount {
+  const fresh = createAccount(account.userId, { startBalance: 0 } as EconomyConfig);
+  const record = account as unknown as Record<string, unknown>;
+  const defaults = fresh as unknown as Record<string, unknown>;
+  for (const key of Object.keys(defaults)) {
+    if (record[key] === undefined || record[key] === null) record[key] = defaults[key];
+  }
+  if (!Array.isArray(account.achievements)) account.achievements = [];
+  if (!Array.isArray(account.items)) account.items = [];
+  if (!Array.isArray(account.history)) account.history = [];
+  if (typeof account.cooldowns !== 'object' || account.cooldowns === null) account.cooldowns = {};
+  if (typeof account.stocks !== 'object' || account.stocks === null) account.stocks = {};
+  if (typeof account.questProgress !== 'object' || account.questProgress === null) account.questProgress = {};
+  return account;
 }
 
 /** Renvoie le compte d'un membre, créé à la volée s'il n'existe pas. */
@@ -102,6 +136,7 @@ export function rollDay(account: EconomyAccount, config: EconomyConfig, now: Dat
   account.workToday = 0;
   account.robToday = 0;
   account.begToday = 0;
+  account.questProgress = {};
   void config;
   return account;
 }
@@ -374,4 +409,88 @@ export function moneySupply(state: StoreState): { cash: number; bank: number; to
     bank += account.bank;
   }
   return { cash, bank, total: cash + bank, accounts: Object.keys(state.accounts).length };
+}
+
+// ------------------------------------------------------------
+//  Progression : XP, niveaux, prestige
+// ------------------------------------------------------------
+
+/** XP nécessaire pour passer du niveau `level` au niveau suivant. */
+export function xpToNext(level: number): number {
+  const safe = Math.max(1, Math.floor(level));
+  return Math.ceil(100 + safe * 75);
+}
+
+/** Niveau atteint avec `xp` points d’expérience (le niveau 1 démarre à 0 XP). */
+export function levelFromXp(xp: number): { level: number; intoLevel: number; toNext: number } {
+  let level = 1;
+  let remaining = Math.max(0, Math.floor(xp));
+  let guard = 0;
+  while (remaining >= xpToNext(level) && guard < 10_000) {
+    remaining -= xpToNext(level);
+    level += 1;
+    guard += 1;
+  }
+  return { level, intoLevel: remaining, toNext: xpToNext(level) };
+}
+
+/**
+ * Multiplicateur de gains apporté par la progression : bonus de niveau
+ * (déblocable) + bonus de prestige (permanent). Le bonus de rôle « boost »
+ * est appliqué séparément par `applyBoost`.
+ */
+export function progressionMultiplier(config: EconomyConfig, account: EconomyAccount): number {
+  if (!config.xpEnabled) return 1;
+  const levelBonus = Math.min(
+    config.levelBonusMaxPercent,
+    Math.max(0, account.level - 1) * config.levelBonusPercent,
+  );
+  const prestigeBonus = config.prestigeEnabled ? account.prestige * config.prestigeBonusPercent : 0;
+  return 1 + (levelBonus + prestigeBonus) / 100;
+}
+
+export interface XpGain {
+  xp: number;
+  level: number;
+  leveledUp: boolean;
+  levelsGained: number;
+  rewardPaid: number;
+}
+
+/**
+ * Attribue de l’XP à partir d’un montant gagné, applique les montées de
+ * niveau et crédite la récompense de niveau. Retourne false si l’XP est
+ * désactivée ou si le montant est nul.
+ */
+export function awardXp(
+  account: EconomyAccount,
+  config: EconomyConfig,
+  earnedAmount: number,
+  now: Date = new Date(),
+): XpGain | null {
+  if (!config.xpEnabled || earnedAmount <= 0) return null;
+  const per = Math.max(1, config.xpPerAmount);
+  const gained = Math.floor(earnedAmount / per);
+  if (gained <= 0) return null;
+
+  const before = account.level;
+  account.xp += gained;
+  const resolved = levelFromXp(account.xp);
+  account.level = resolved.level;
+  const levelsGained = Math.max(0, resolved.level - before);
+
+  let rewardPaid = 0;
+  if (levelsGained > 0 && config.levelReward > 0) {
+    const reward = levelsGained * config.levelReward;
+    const paid = credit(account, config, reward, 'levelup', `Montée au niveau ${account.level}`);
+    if (paid.ok) rewardPaid = paid.amount;
+  }
+  account.updatedAt = now.toISOString();
+  return {
+    xp: gained,
+    level: account.level,
+    leveledUp: levelsGained > 0,
+    levelsGained,
+    rewardPaid,
+  };
 }

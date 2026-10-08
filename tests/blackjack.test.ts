@@ -254,6 +254,8 @@ test('tirer, rester puis encaisser crédite les gains taxés', () => {
   const state = setup();
   const config = state.config.blackjack;
   const economy = state.config.economy;
+  // succès désactivés : ils versent de l’argent et brouilleraient le calcul du règlement
+  economy.achievementsEnabled = false;
   config.taxPercent = 10;
   config.allowDoubleDown = true;
 

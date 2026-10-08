@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { emptyState, mergeConfig } from './config';
+import { hydrateAccount } from './economy/core';
 import type { StoreState } from './types';
 
 // ============================================================
@@ -46,6 +47,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Complète tous les comptes chargés (compatibilité avec les anciennes versions). */
+function hydrateAccounts(accounts: StoreState['accounts']): StoreState['accounts'] {
+  for (const account of Object.values(accounts)) {
+    if (isRecord(account)) hydrateAccount(account as StoreState['accounts'][string]);
+  }
+  return accounts;
+}
+
 function normalize(raw: unknown): StoreState {
   const base = emptyState();
   if (!isRecord(raw)) return base;
@@ -57,7 +66,7 @@ function normalize(raw: unknown): StoreState {
     embeds: Array.isArray(partial.embeds) ? partial.embeds : [],
     logs: Array.isArray(partial.logs) ? partial.logs : [],
     tempRooms: Array.isArray(partial.tempRooms) ? partial.tempRooms : [],
-    accounts: isRecord(partial.accounts) ? (partial.accounts as StoreState['accounts']) : {},
+    accounts: isRecord(partial.accounts) ? hydrateAccounts(partial.accounts as StoreState['accounts']) : {},
     shopItems: Array.isArray(partial.shopItems) ? partial.shopItems : [],
     purchases: Array.isArray(partial.purchases) ? partial.purchases : [],
     cases: Array.isArray(partial.cases) ? partial.cases : [],
@@ -189,7 +198,7 @@ export async function resetConfig(): Promise<void> {
 
 /** Réinitialise uniquement une partie de la configuration. */
 export async function resetConfigSection(
-  section: 'economy' | 'blackjack' | 'shop' | 'moderation' | 'ui',
+  section: 'economy' | 'blackjack' | 'games' | 'shop' | 'moderation' | 'ui',
 ): Promise<void> {
   await updateState((state) => {
     const fresh = emptyState();
@@ -199,6 +208,9 @@ export async function resetConfigSection(
         break;
       case 'blackjack':
         state.config.blackjack = fresh.config.blackjack;
+        break;
+      case 'games':
+        state.config.games = fresh.config.games;
         break;
       case 'shop':
         state.config.shop = fresh.config.shop;

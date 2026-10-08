@@ -6,7 +6,11 @@ Le bot ne crée **aucune structure** sur ton serveur : pas de catégories, pas d
 fabriqué à l'installation. Il utilise uniquement les salons et les rôles **existants** que tu choisis
 dans le panel, et il apporte tout le reste :
 
-- 💰 une **économie complète** et configurable — **148 options** réparties en 17 sections ;
+- 💰 une **économie complète** et configurable — **190 options** réparties en 25 sections ;
+- 🎰 un **casino** (roulette, pile ou face, dés, machine à sous, mines, crash, plinko) — **27 options** ;
+- 💼 des **rôles de revenu** qui paient toutes les heures (`/jobs`, `/income`), un **menu économique interactif** (`/eco`),
+  des **quêtes quotidiennes**, une **loterie** avec jackpot, une **bourse**, une **roue de la fortune**, des **coffres**,
+  de l’**XP**, des **niveaux**, du **prestige** et des **succès** ;
 - 🃏 un **blackjack** de casino (sabot, partage, double, assurance, abandon, paris annexes) — **44 options** ;
 - 🛒 une **boutique configurable** (rôles, boucliers, boosters, collections, stock, promotions) — **22 options** ;
 - 🛡️ une **modération avancée** avec **avertissements + message privé automatique**, dossiers numérotés,
@@ -15,7 +19,7 @@ dans le panel, et il apporte tout le reste :
 - 🎨 un **système d'interface unifié** : thème, menu central `/panel` et cartes par section —
   **41 options**.
 
-**314 options** au total, **49 commandes slash**, et un seul service à déployer : le bot et le panel
+**383 options** au total, **67 commandes slash**, et un seul service à déployer : le bot et le panel
 tournent dans le même process Node (plan gratuit Render possible).
 
 ---
@@ -38,7 +42,7 @@ tournent dans le même process Node (plan gratuit Render possible).
 
 ## 1. Fonctionnalités
 
-### 💰 Économie (148 options · 17 sections)
+### 💰 Économie (190 options · 25 sections)
 
 | Domaine | Ce que tu règles |
 | --- | --- |
@@ -49,6 +53,13 @@ tournent dans le même process Node (plan gratuit Render possible).
 | Drops | cagnotte lâchée automatiquement dans un salon, montant, fréquence, durée de vie, premier arrivé |
 | Paris | mise minimale/maximale, pourcentage du solde, taxe de jeu, plafond de perte quotidienne |
 | Classement | taille du classement, bots masqués, membres ignorés, rôle du « plus riche » rafraîchi automatiquement |
+| Rôles de revenu | rôles achetés en boutique qui rapportent un revenu horaire, plafond d’accumulation, réclamation avec `/income` |
+| Progression | XP par gain, niveaux avec bonus de gains et récompense par niveau, prestige (bonus permanent contre remise à zéro) |
+| Quêtes | quêtes quotidiennes communes au serveur, récompenses en pièces et en XP |
+| Loterie | tickets, jackpot progressif alimenté par les mises, tirage automatique pondéré |
+| Bourse | actions fictives dont les cours fluctuent, frais d’achat/vente, portefeuille et P&L |
+| Récompenses | roue de la fortune (1 tour / 20 h), coffres quotidiens, jackpots |
+| Succès | succès débloqués automatiquement, avec récompenses en pièces et en XP |
 | Sécurité | anti-comptes multiples, historique des transactions, remise à zéro au départ, journal |
 
 Chaque gain respecte les plafonds, les temps de recharge et les bonus de série — le calcul est dans
@@ -63,6 +74,20 @@ Chaque gain respecte les plafonds, les temps de recharge et les bonus de série 
 - paris annexes **21+3** et **paire parfaite** ;
 - bonus de série de victoires, compensation après une série de défaites, taxe de table ;
 - timeout de tour avec action automatique (rester / abandonner), messages et couleurs de table.
+
+### 🎰 Casino (27 options · 8 sections)
+
+Une seule configuration, éditable dans le panel (page **Casino**) :
+
+- **Roulette** européenne (numéro plein, couleur, pair/impair, douzaines), **pile ou face**, **dés**
+  (numéro exact, pair/impair, bas/haut) ;
+- **Machine à sous** : 3 rouleaux, 2 ou 3 symboles identiques, jackpot configurable ;
+- **Mines** : grille de 24 tuiles, 1 à 23 mines, encaissement à tout moment, avantage maison réglable ;
+- **Crash** : une fusée qui grimpe, à encaisser avant l’explosion ;
+- **Plinko** : 12 rangées, risque faible / moyen / élevé ;
+- mises, délais, salons autorisés et taxe commune avec l’économie.
+
+Les paiements sont exprimés en **retour total (mise comprise)** et les défauts laissent environ 3 à 5 % à la maison.
 
 ### 🛒 Boutique (22 options + catalogue illimité)
 
@@ -122,7 +147,8 @@ tu vois à l'écran est exactement ce que Discord affichera.
 | --- | --- |
 | `/` | Tableau de bord : état du bot, masse monétaire, parties, avertissements, classement, journal |
 | `/ui` | **Interface du bot** : thème, menu central, sections, cartes + aperçu du rendu Discord |
-| `/economy` | Les 148 options d'économie, avec recherche et aperçu des gains |
+| `/economy` | Les 190 options d'économie, avec recherche et aperçu des gains |
+| `/casino` | Les 27 options du casino et les jeux ouverts |
 | `/economy/players` | Comptes des membres : soldes, banque, inventaire, ajustements, réinitialisation |
 | `/blackjack` | Tables en cours, statistiques des joueurs, 44 options de jeu |
 | `/shop` | Catalogue éditable (création, stock, position, visibilité) + 22 options |
@@ -238,17 +264,17 @@ npm run build       # build Next.js de production
 npm test            # suite de tests (logique économie, blackjack, boutique, modération, bot)
 ```
 
-La suite de tests (`tests/`) couvre la logique métier pure : 79 assertions réparties sur la
+La suite de tests (`tests/`) couvre la logique métier pure : 129 tests répartis sur la
 normalisation des configurations, l'économie (gains, plafonds, intérêts, transferts), le règlement du
 blackjack (payouts, assurance, partage, taxes), la boutique (achats, stock, revente, réassort), la
 modération (dossiers, paliers, auto-modération, MP de sanction), la persistance et l'intégrité des
-49 commandes slash.
+67 commandes slash.
 
 ---
 
 ## 9. Commandes Discord
 
-**49 commandes** enregistrées au démarrage.
+**67 commandes** enregistrées au démarrage.
 
 ### Économie & jeux (15)
 
@@ -256,6 +282,12 @@ modération (dossiers, paliers, auto-modération, MP de sanction), la persistanc
 `/bank` (solde, depot, retrait) · `/leaderboard` · `/inventaire` · `/revendre` ·
 `/shop` (liste, acheter, vitrine) · `/blackjack` (jouer, carte, rester, doubler, split, assurance,
 abandonner, quitter, stats, regles)
+
+### Casino & économie+ (18)
+
+`/casino` · `/eco` (menu interactif) · `/roulette` · `/coinflip` · `/dice` · `/slots` · `/mines` · `/crash` ·
+`/plinko` · `/jobs` (achat de rôles de revenu) · `/income` · `/quetes` · `/loterie` (acheter, infos) ·
+`/bourse` (cours, acheter, vendre, portefeuille) · `/spin` · `/coffre` · `/prestige` · `/succes`
 
 ### Modération (25)
 
@@ -317,7 +349,8 @@ src/
 │   └── ui.ts               # design system + menu central (cartes pures → embeds Discord)
 ├── components/             # Sidebar, ConfigEditor, DiscordPreview, sélecteurs, formulaires
 └── lib/
-    ├── economy/            # configuration (148 options), cœur de l'économie, actions
+    ├── economy/            # configuration (190 options), cœur de l'économie, actions, revenus, quêtes, loterie, bourse, extras
+    ├── games/              # casino : configuration (27 options), moteurs purs, tables et sessions (mines, crash)
     ├── blackjack/          # configuration (44), moteur de jeu, table
     ├── shop/               # configuration (22), articles, achats
     ├── moderation/         # configuration (59), dossiers, auto-modération

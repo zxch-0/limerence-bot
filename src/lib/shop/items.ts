@@ -3,6 +3,7 @@ import type { ShopConfig, ShopItem, ShopItemType, StoreState } from '../types';
 import type { EconomyConfig } from '../types';
 import { credit, debit, ensureAccount, formatMoney, pushTransaction } from '../economy/core';
 import { accountAgeDays } from '../economy/actions';
+import { trackQuest } from '../economy/quests';
 
 // ============================================================
 //  Boutique — articles, achats, inventaire
@@ -31,8 +32,13 @@ export function sanitizeItemInput(input: ShopItemInput): ShopItem | { error: str
   const price = Math.round(Number(input.price));
   if (!Number.isFinite(price) || price < 1) return { error: 'Le prix doit être un entier supérieur à 0.' };
   const type = input.type;
-  if (type === 'role' && !/^\d{15,25}$/.test(String(input.roleId ?? ''))) {
-    return { error: 'Un article « rôle » doit être associé à un rôle Discord existant.' };
+  if ((type === 'role' || type === 'income') && !/^\d{15,25}$/.test(String(input.roleId ?? ''))) {
+    return {
+      error:
+        type === 'income'
+          ? 'Un article « rôle de revenu » doit être associé à un rôle Discord existant.'
+          : 'Un article « rôle » doit être associé à un rôle Discord existant.',
+    };
   }
   const stock = Number.isFinite(Number(input.stock)) ? Math.round(Number(input.stock)) : -1;
   return {
@@ -42,7 +48,7 @@ export function sanitizeItemInput(input: ShopItemInput): ShopItem | { error: str
     description: String(input.description ?? '').trim().slice(0, 200),
     price,
     type,
-    roleId: type === 'role' ? String(input.roleId) : '',
+    roleId: type === 'role' || type === 'income' ? String(input.roleId) : '',
     effectValue: Math.max(0, Math.min(500, Math.round(Number(input.effectValue ?? 0) || 0))),
     durationHours: Math.max(0, Math.min(8760, Math.round(Number(input.durationHours ?? 0) || 0))),
     stock: stock < -1 ? -1 : stock,
@@ -145,6 +151,9 @@ export function purchaseItem(state: StoreState, input: PurchaseOptions): Purchas
   const paid = debit(account, economy, total, 'shop', `Achat : ${item.name}`, now);
   if (!paid.ok) return { ok: false, error: paid.reason ?? 'Solde insuffisant.' };
 
+  // quêtes : dépenser de l’argent fait avancer les quêtes « spend_money »
+  trackQuest(state, account, economy, 'spend_money', total, now);
+
   if (item.stock > 0) item.stock = Math.max(0, item.stock - 1);
   account.cooldowns.shop = now.toISOString();
 
@@ -185,9 +194,9 @@ export function purchaseItem(state: StoreState, input: PurchaseOptions): Purchas
     ok: true,
     item,
     total,
-    grantRoleId: item.type === 'role' ? item.roleId : undefined,
+    grantRoleId: item.type === 'role' || item.type === 'income' ? item.roleId : undefined,
     grantRoleHours:
-      item.type === 'role'
+      item.type === 'role' || item.type === 'income'
         ? (item.durationHours > 0 ? item.durationHours : shop.roleDurationDays * 24)
         : undefined,
     message: `${item.emoji} **${item.name}** acheté pour ${formatMoney(economy, total)}.`,
@@ -215,7 +224,9 @@ export function resellItem(
   const index = account.items.findIndex((entry) => entry.itemId === itemId || entry.name.toLowerCase() === itemId.toLowerCase());
   if (index === -1) return { ok: false, error: 'Tu ne possèdes pas cet article.' };
   const entry = account.items[index];
-  if (entry.effect === 'role') return { ok: false, error: 'Un rôle acheté ne se revend pas.' };
+  if (entry.effect === 'role' || entry.effect === 'income') {
+    return { ok: false, error: 'Un rôle acheté ne se revend pas.' };
+  }
 
   const source = state.shopItems.find((item) => item.id === entry.itemId);
   const base = entry.paid ?? source?.price ?? 0;

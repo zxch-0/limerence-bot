@@ -7,7 +7,9 @@ import type {
   EconomyConfig,
   StoreState,
 } from '../types';
-import { credit, debit, ensureAccount, formatMoney } from '../economy/core';
+import { awardXp, credit, debit, ensureAccount, formatMoney } from '../economy/core';
+import { trackQuest } from '../economy/quests';
+import { checkAchievements } from '../economy/extras';
 import {
   blackjackRatio,
   canDouble,
@@ -473,6 +475,17 @@ export function finishGame(
     stats.pushes += 1;
     account.winStreak = 0;
   }
+
+  // quêtes, XP et succès (progression commune à tous les jeux)
+  const quests = trackQuest(state, account, economy, 'play_games', 1, now);
+  if (net > 0) {
+    quests.completed.push(...trackQuest(state, account, economy, 'win_games', 1, now).completed);
+    quests.completed.push(...trackQuest(state, account, economy, 'gain_money', net, now).completed);
+    awardXp(account, economy, net, now);
+  } else if (net < 0) {
+    quests.completed.push(...trackQuest(state, account, economy, 'spend_money', -net, now).completed);
+  }
+  checkAchievements(state, account, economy, now);
 
   game.status = 'finished';
   game.holeRevealed = true;

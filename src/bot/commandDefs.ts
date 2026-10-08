@@ -589,8 +589,186 @@ export function utilityCommands(): CommandDefinition[] {
   ];
 }
 
+// ------------------------------------------------------------
+//  Casino & fonctionnalités économiques (18 commandes)
+// ------------------------------------------------------------
+
+export function casinoCommands(): CommandDefinition[] {
+  return [
+    new SlashCommandBuilder()
+      .setName('casino')
+      .setDescription('🎰 Menu du casino : jeux, mises et règles'),
+    new SlashCommandBuilder()
+      .setName('eco')
+      .setDescription('💼 Menu interactif de l’économie (jeux, jobs, quêtes, loterie…)'),
+    new SlashCommandBuilder()
+      .setName('roulette')
+      .setDescription('🎡 Jouer à la roulette')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('pari')
+          .setDescription('Type de pari (ignoré si « numero » est rempli)')
+          .addChoices(
+            { name: 'Rouge', value: 'rouge' },
+            { name: 'Noir', value: 'noir' },
+            { name: 'Vert (0)', value: 'vert' },
+            { name: 'Pair', value: 'pair' },
+            { name: 'Impair', value: 'impair' },
+            { name: '1-12', value: '1-12' },
+            { name: '13-24', value: '13-24' },
+            { name: '25-36', value: '25-36' },
+          ),
+      )
+      .addIntegerOption((option) =>
+        option.setName('numero').setDescription('Numéro plein (0-36)').setMinValue(0).setMaxValue(36),
+      ),
+    new SlashCommandBuilder()
+      .setName('coinflip')
+      .setDescription('🪙 Jouer au pile ou face')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('cote')
+          .setDescription('Ton côté de la pièce')
+          .setRequired(true)
+          .addChoices({ name: 'Pile', value: 'pile' }, { name: 'Face', value: 'face' }),
+      ),
+    new SlashCommandBuilder()
+      .setName('dice')
+      .setDescription('🎲 Lancer les dés')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('pari')
+          .setDescription('Type de pari')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Numéro exact (1-6)', value: 'exact' },
+            { name: 'Pair', value: 'pair' },
+            { name: 'Impair', value: 'impair' },
+            { name: 'Bas (1-3)', value: 'bas' },
+            { name: 'Haut (4-6)', value: 'haut' },
+          ),
+      )
+      .addIntegerOption((option) =>
+        option.setName('numero').setDescription('Numéro visé (pari exact)').setMinValue(1).setMaxValue(6),
+      ),
+    new SlashCommandBuilder()
+      .setName('slots')
+      .setDescription('🎰 Jouer à la machine à sous')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      ),
+    new SlashCommandBuilder()
+      .setName('mines')
+      .setDescription('💣 Jouer au démineur (révèle les tuiles, encaisse à temps)')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('bombes')
+          .setDescription('Nombre de mines dans la grille')
+          .setMinValue(1)
+          .setMaxValue(23)
+          .setRequired(true),
+      ),
+    new SlashCommandBuilder()
+      .setName('crash')
+      .setDescription('🚀 Jouer au crash (la fusée grimpe, encaisse avant l’explosion)')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      ),
+    new SlashCommandBuilder()
+      .setName('plinko')
+      .setDescription('🪂 Jouer au plinko (lâche une bille, croise les doigts)')
+      .addIntegerOption((option) =>
+        option.setName('mise').setDescription('Montant de la mise').setMinValue(1).setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('risque')
+          .setDescription('Niveau de risque (paiements)')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Faible', value: 'faible' },
+            { name: 'Moyen', value: 'moyen' },
+            { name: 'Élevé', value: 'eleve' },
+          ),
+      ),
+    new SlashCommandBuilder()
+      .setName('jobs')
+      .setDescription('💼 Acheter un rôle qui génère un revenu passif (réclame avec /income)'),
+    new SlashCommandBuilder()
+      .setName('income')
+      .setDescription('💰 Réclamer le revenu accumulé par tes rôles'),
+    new SlashCommandBuilder()
+      .setName('quetes')
+      .setDescription('🎯 Voir tes quêtes du jour et leurs récompenses'),
+    new SlashCommandBuilder()
+      .setName('loterie')
+      .setDescription('🎟️ La loterie du serveur (jackpot progressif)')
+      .addSubcommand((sub) =>
+        sub
+          .setName('acheter')
+          .setDescription('Acheter des tickets de loterie')
+          .addIntegerOption((option) =>
+            option
+              .setName('nombre')
+              .setDescription('Nombre de tickets')
+              .setMinValue(1)
+              .setMaxValue(100)
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName('infos').setDescription('Jackpot, tes tickets et les derniers tirages')),
+    new SlashCommandBuilder()
+      .setName('bourse')
+      .setDescription('📊 La bourse du serveur (actions fictives)')
+      .addSubcommand((sub) => sub.setName('cours').setDescription('Voir les cours actuels'))
+      .addSubcommand((sub) =>
+        sub
+          .setName('acheter')
+          .setDescription('Acheter des actions')
+          .addStringOption((option) => option.setName('symbole').setDescription('Symbole (ex: LMC)').setRequired(true))
+          .addIntegerOption((option) =>
+            option.setName('montant').setDescription('Montant à investir').setMinValue(1).setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('vendre')
+          .setDescription('Vendre des actions (tout si montant vide)')
+          .addStringOption((option) => option.setName('symbole').setDescription('Symbole (ex: LMC)').setRequired(true))
+          .addIntegerOption((option) =>
+            option.setName('montant').setDescription('Montant à vendre (vide = tout vendre)').setMinValue(1),
+          ),
+      )
+      .addSubcommand((sub) => sub.setName('portefeuille').setDescription('Voir ton portefeuille')),
+    new SlashCommandBuilder()
+      .setName('spin')
+      .setDescription('🎡 Tourner la roue de la fortune (1 tour gratuit toutes les 20 h)'),
+    new SlashCommandBuilder()
+      .setName('coffre')
+      .setDescription('📦 Ouvrir un coffre (1 coffre gratuit par jour)'),
+    new SlashCommandBuilder()
+      .setName('prestige')
+      .setDescription('🌟 Recommencer à zéro contre un bonus de gains permanent'),
+    new SlashCommandBuilder()
+      .setName('succes')
+      .setDescription('🏅 Voir tes succès débloqués et à débloquer'),
+  ];
+}
+
 export function buildCommands(): CommandDefinition[] {
-  return [...economyCommands(), ...moderationCommands(), ...utilityCommands()];
+  return [...economyCommands(), ...casinoCommands(), ...moderationCommands(), ...utilityCommands()];
 }
 
 export const COMMAND_COUNT = buildCommands().length;
