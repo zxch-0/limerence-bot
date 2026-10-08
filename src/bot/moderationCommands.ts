@@ -523,6 +523,8 @@ export function helpEmbed(): EmbedBuilder {
   const sections: Array<[string, string]> = [
     ['💰 Économie', '`/balance` `/profil` `/daily` `/work` `/crime` `/rob` `/beg` `/search` `/pay` `/bank` `/leaderboard` `/inventaire` `/revendre`'],
     ['🃏 Blackjack', '`/blackjack jouer|carte|rester|doubler|split|assurance|abandonner|quitter|stats|regles`'],
+    ['🎰 Casino', '`/casino` `/roulette` `/coinflip` `/dice` `/slots` `/mines` `/crash` `/plinko`'],
+    ['💼 Économie+', '`/eco` (menu) `/jobs` `/income` `/quetes` `/loterie acheter|infos` `/bourse cours|acheter|vendre|portefeuille` `/spin` `/coffre` `/prestige` `/succes`'],
     ['🛒 Boutique', '`/shop liste` `/shop acheter` `/shop vitrine`'],
     ['🛡️ Modération', '`/warn` `/cas` `/kick` `/ban` `/unban` `/softban` `/mute` `/unmute` `/nick` `/purge` `/lock` `/unlock` `/lockdown` `/unlockdown` `/slowmode` `/nuke` `/addrole` `/removerole` `/banlist` `/antiraid`'],
     ['🔎 Informations', '`/userinfo` `/serverinfo` `/roleinfo` `/aide` `/ping`'],

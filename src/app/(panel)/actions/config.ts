@@ -1,6 +1,7 @@
 'use server';
 
 import { BLACKJACK_DEFAULT_VALUES, BLACKJACK_FIELDS } from '@/lib/blackjack/config';
+import { GAMES_DEFAULT_VALUES, GAMES_FIELDS } from '@/lib/games/config';
 import { ECONOMY_DEFAULT_VALUES, ECONOMY_FIELDS } from '@/lib/economy/config';
 import { MODERATION_DEFAULT_VALUES, MODERATION_FIELDS } from '@/lib/moderation/config';
 import { SHOP_DEFAULT_VALUES, SHOP_FIELDS } from '@/lib/shop/config';
@@ -11,6 +12,7 @@ import {
   type BlackjackConfig,
   type ChannelSlot,
   type EconomyConfig,
+  type GamesConfig,
   type ModerationConfig,
   type ShopConfig,
   type UiConfig,
@@ -47,7 +49,7 @@ import { redirect } from 'next/navigation';
 //  le même code lit le formulaire, valide, borne et enregistre.
 // ============================================================
 
-type SectionId = 'economy' | 'blackjack' | 'shop' | 'moderation' | 'ui';
+type SectionId = 'economy' | 'blackjack' | 'games' | 'shop' | 'moderation' | 'ui';
 
 const SECTIONS: Record<
   SectionId,
@@ -55,6 +57,7 @@ const SECTIONS: Record<
 > = {
   economy: { label: 'économie', fields: ECONOMY_FIELDS, defaults: ECONOMY_DEFAULT_VALUES },
   blackjack: { label: 'blackjack', fields: BLACKJACK_FIELDS, defaults: BLACKJACK_DEFAULT_VALUES },
+  games: { label: 'casino', fields: GAMES_FIELDS, defaults: GAMES_DEFAULT_VALUES },
   shop: { label: 'boutique', fields: SHOP_FIELDS, defaults: SHOP_DEFAULT_VALUES },
   moderation: { label: 'modération', fields: MODERATION_FIELDS, defaults: MODERATION_DEFAULT_VALUES },
   ui: { label: 'interface', fields: UI_FIELDS, defaults: UI_DEFAULT_VALUES },
@@ -93,6 +96,9 @@ async function saveSection(section: SectionId, formData: FormData): Promise<Acti
         break;
       case 'blackjack':
         state.config.blackjack = value as BlackjackConfig;
+        break;
+      case 'games':
+        state.config.games = value as GamesConfig;
         break;
       case 'shop':
         state.config.shop = value as ShopConfig;
@@ -133,6 +139,8 @@ async function readCurrentValues(section: SectionId): Promise<ConfigValues> {
       return { ...state.config.economy };
     case 'blackjack':
       return { ...state.config.blackjack };
+    case 'games':
+      return { ...state.config.games };
     case 'shop':
       return { ...state.config.shop };
     case 'moderation':
@@ -148,6 +156,10 @@ export async function saveEconomyConfigAction(_prev: ActionState | null, formDat
 
 export async function saveBlackjackConfigAction(_prev: ActionState | null, formData: FormData) {
   return saveSection('blackjack', formData);
+}
+
+export async function saveGamesConfigAction(_prev: ActionState | null, formData: FormData) {
+  return saveSection('games', formData);
 }
 
 export async function saveShopConfigAction(_prev: ActionState | null, formData: FormData) {

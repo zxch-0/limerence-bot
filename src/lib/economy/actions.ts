@@ -1,6 +1,7 @@
-import type { EconomyAccount, EconomyConfig, StoreState } from '../types';
+import type { EconomyAccount, EconomyConfig, QuestDef, StoreState } from '../types';
 import {
   applyBoost,
+  awardXp,
   chance,
   cooldownRemaining,
   credit,
@@ -11,19 +12,23 @@ import {
   humanDuration,
   isJailed,
   pick,
+  progressionMultiplier,
   pushTransaction,
   randomInt,
   setCooldown,
   totalBalance,
   type Rng,
 } from './core';
+import { trackQuest } from './quests';
+import { checkAchievements } from './extras';
 
 // ============================================================
 //  Actions économiques (daily, work, crime, rob, beg, search, pay…)
 //
 //  Logique pure : aucune dépendance à Discord. Chaque action vérifie
 //  l'activation, les cooldowns, les plafonds quotidiens et l'anti-abus
-//  avant de toucher au solde.
+//  avant de toucher au solde. Les gains sont multipliés par la
+//  progression (niveau, prestige) et alimentent XP, quêtes et succès.
 // ============================================================
 
 const DISCORD_EPOCH = 1_420_070_400_000n;
@@ -56,6 +61,33 @@ export interface ActionResult {
   ok: boolean;
   message: string;
   amount?: number;
+  /** montée de niveau déclenchée par cette action (pour l’annonce) */
+  levelUp?: { from: number; to: number };
+  /** succès débloqués par cette action */
+  achievements?: string[];
+  /** quêtes complétées par cette action */
+  questsCompleted?: QuestDef[];
+}
+
+/** Regroupe XP + quêtes + succès après un gain d’argent. */
+function progression(
+  state: StoreState,
+  account: EconomyAccount,
+  config: EconomyConfig,
+  earned: number,
+  now: Date,
+  questType?: 'daily' | 'work' | 'crime' | 'rob' | 'search',
+): Pick<ActionResult, 'levelUp' | 'achievements' | 'questsCompleted'> {
+  const out: Pick<ActionResult, 'levelUp' | 'achievements' | 'questsCompleted'> = {};
+  const xp = awardXp(account, config, earned, now);
+  if (xp?.leveledUp) out.levelUp = { from: xp.level - xp.levelsGained, to: xp.level };
+  const completed: QuestDef[] = [];
+  if (questType) completed.push(...trackQuest(state, account, config, questType, 1, now).completed);
+  if (earned > 0) completed.push(...trackQuest(state, account, config, 'gain_money', earned, now).completed);
+  if (completed.length) out.questsCompleted = completed;
+  const unlocked = checkAchievements(state, account, config, now);
+  if (unlocked.length) out.achievements = unlocked.map((entry) => entry.def.id);
+  return out;
 }
 
 function ctx(context: ActionContext): { now: Date; rng: Rng; roleIds: string[] } {
@@ -134,7 +166,9 @@ export function runDaily(
     Math.max(0, account.dailyStreak - 1) * config.dailyStreakBonus,
   );
   const weekly = account.dailyStreak > 0 && account.dailyStreak % 7 === 0 ? config.dailyWeeklyBonus : 0;
-  const base = applyBoost(config, roleIds, randomInt(config.dailyMin, config.dailyMax, rng));
+  const base =
+    applyBoost(config, roleIds, randomInt(config.dailyMin, config.dailyMax, rng)) *
+    progressionMultiplier(config, account);
   const total = Math.round(base + streakBonus + weekly);
 
   const paid = credit(account, config, total, 'daily', `Quotidien (série ${account.dailyStreak})`, now);
@@ -142,13 +176,13 @@ export function runDaily(
 
   setCooldown(account, 'daily', config.dailyCooldownHours * 3600, now);
   account.updatedAt = now.toISOString();
-  void state;
+  const prog = progression(state, account, config, paid.amount, now, 'daily');
 
   const parts = [`📅 Récompense quotidienne : **${formatMoney(config, paid.amount)}**`];
   if (streakBonus > 0) parts.push(`🔥 Série de ${account.dailyStreak} jour(s) : +${formatMoney(config, streakBonus)}`);
   if (weekly > 0) parts.push(`🎉 Bonus du 7e jour : +${formatMoney(config, weekly)}`);
   parts.push(`Prochain /daily dans ${humanDuration(config.dailyCooldownHours * 3_600_000)}.`);
-  return { ok: true, message: parts.join('\n'), amount: paid.amount };
+  return { ok: true, message: parts.join('\n'), amount: paid.amount, ...prog };
 }
 
 // ------------------------------------------------------------
@@ -176,30 +210,36 @@ export function runWork(
   }
 
   const job = pick(config.workJobs, rng) ?? 'petit boulot';
-  const salary = applyBoost(config, roleIds, randomInt(config.workMin, config.workMax, rng));
+  const salary =
+    applyBoost(config, roleIds, randomInt(config.workMin, config.workMax, rng)) *
+    progressionMultiplier(config, account);
   account.workToday += 1;
   setCooldown(account, 'work', config.workCooldownMinutes * 60, now);
+  const done = trackQuest(state, account, config, 'work', 1, now).completed;
 
   if (chance(config.workFailChancePercent, rng)) {
     const penalty = Math.round((salary * config.workFailPenaltyPercent) / 100);
     account.workStreak = 0;
     if (penalty > 0) debit(account, config, penalty, 'work', `Échec au travail (${job})`, now);
     account.updatedAt = now.toISOString();
-    void state;
     return {
       ok: false,
       message: `🛠️ ${job} : ça ne s’est pas passé comme prévu…${penalty > 0 ? ` Tu perds ${formatMoney(config, penalty)}.` : ''}`,
       amount: -penalty,
+      questsCompleted: done.length ? done : undefined,
     };
   }
 
   account.workStreak += 1;
   const paid = credit(account, config, salary, 'work', `Travail : ${job}`, now);
   if (!paid.ok) return { ok: false, message: paid.reason ?? 'Impossible de te payer.' };
+  const prog = progression(state, account, config, paid.amount, now);
+  if (done.length) prog.questsCompleted = [...(prog.questsCompleted ?? []), ...done];
   return {
     ok: true,
     message: `🛠️ Tu travailles comme **${job}** et gagnes **${formatMoney(config, paid.amount)}**.`,
     amount: paid.amount,
+    ...prog,
   };
 }
 
@@ -224,13 +264,23 @@ export function runCrime(
   const waiting = checkCooldown(account, 'crime', 'nouveau coup', now);
   if (waiting) return waiting;
 
-  const loot = applyBoost(config, roleIds, randomInt(config.crimeMin, config.crimeMax, rng));
+  const loot =
+    applyBoost(config, roleIds, randomInt(config.crimeMin, config.crimeMax, rng)) *
+    progressionMultiplier(config, account);
   setCooldown(account, 'crime', config.crimeCooldownMinutes * 60, now);
+  const done = trackQuest(state, account, config, 'crime', 1, now).completed;
 
   if (chance(config.crimeSuccessChancePercent, rng)) {
     const paid = credit(account, config, loot, 'crime', 'Butin', now);
     if (!paid.ok) return { ok: false, message: paid.reason ?? 'Impossible d’encaisser le butin.' };
-    return { ok: true, message: `🕵️ Coup réussi ! Butin : **${formatMoney(config, paid.amount)}**.`, amount: paid.amount };
+    const prog = progression(state, account, config, paid.amount, now);
+    if (done.length) prog.questsCompleted = [...(prog.questsCompleted ?? []), ...done];
+    return {
+      ok: true,
+      message: `🕵️ Coup réussi ! Butin : **${formatMoney(config, paid.amount)}**.`,
+      amount: paid.amount,
+      ...prog,
+    };
   }
 
   const fine = Math.round((account.cash * config.crimeFailPenaltyPercent) / 100);
@@ -239,11 +289,11 @@ export function runCrime(
     account.jailUntil = new Date(now.getTime() + config.crimeJailMinutes * 60_000).toISOString();
   }
   account.updatedAt = now.toISOString();
-  void state;
   return {
     ok: false,
     message: `🚨 Raté ! Amende de **${formatMoney(config, fine)}**${config.crimeJailEnabled ? ` et ${config.crimeJailMinutes} minutes de prison.` : '.'}`,
     amount: -fine,
+    questsCompleted: done.length ? done : undefined,
   };
 }
 
@@ -289,17 +339,21 @@ export function runRob(
   const target = Math.max(1, Math.round(victim.cash * percent));
   account.robToday += 1;
   setCooldown(account, 'rob', config.robCooldownMinutes * 60, now);
+  const done = trackQuest(state, account, config, 'rob', 1, now).completed;
 
   if (chance(config.robSuccessChancePercent, rng)) {
     const taken = debit(victim, config, target, 'rob', `Volé par ${account.userId}`, now);
     if (!taken.ok) return { ok: false, message: 'Le vol a échoué au dernier moment.' };
-    const net = Math.round(taken.amount * (1 - config.robTaxPercent / 100));
+    const net = Math.round(taken.amount * (1 - config.robTaxPercent / 100) * progressionMultiplier(config, account));
     const paid = credit(account, config, net, 'rob', 'Vol réussi', now);
     if (!paid.ok) return { ok: false, message: paid.reason ?? 'Impossible d’encaisser.' };
+    const prog = progression(state, account, config, paid.amount, now);
+    if (done.length) prog.questsCompleted = [...(prog.questsCompleted ?? []), ...done];
     return {
       ok: true,
       message: `🥷 Vol réussi : **${formatMoney(config, paid.amount)}** (taxe ${config.robTaxPercent} %).`,
       amount: paid.amount,
+      ...prog,
     };
   }
 
@@ -310,6 +364,7 @@ export function runRob(
     ok: false,
     message: `🚔 Vol raté ! Tu paies une amende de **${formatMoney(config, fine)}**.`,
     amount: -fine,
+    questsCompleted: done.length ? done : undefined,
   };
 }
 
@@ -338,15 +393,15 @@ export function runBeg(
 
   if (chance(config.begRefuseChancePercent, rng)) {
     account.updatedAt = now.toISOString();
-    void state;
     return { ok: false, message: '🙏 Personne n’a voulu te donner quoi que ce soit…' };
   }
 
-  const amount = randomInt(config.begMin, config.begMax, rng);
+  const amount = randomInt(config.begMin, config.begMax, rng) * progressionMultiplier(config, account);
   const paid = credit(account, config, amount, 'beg', 'Manche', now);
   if (!paid.ok) return { ok: false, message: paid.reason ?? 'Impossible d’encaisser.' };
+  const prog = progression(state, account, config, paid.amount, now);
   const line = pick(config.begLines, rng) ?? 'Quelqu’un te donne quelques pièces.';
-  return { ok: true, message: `🙏 ${line} **${formatMoney(config, paid.amount)}**`, amount: paid.amount };
+  return { ok: true, message: `🙏 ${line} **${formatMoney(config, paid.amount)}**`, amount: paid.amount, ...prog };
 }
 
 // ------------------------------------------------------------
@@ -371,14 +426,19 @@ export function runSearch(
 
   if (chance(config.searchFailChancePercent, rng)) {
     account.updatedAt = now.toISOString();
-    void state;
     return { ok: false, message: `🔎 Tu fouilles ${place}… rien du tout.` };
   }
 
-  const amount = randomInt(config.searchMin, config.searchMax, rng);
+  const amount = randomInt(config.searchMin, config.searchMax, rng) * progressionMultiplier(config, account);
   const paid = credit(account, config, amount, 'search', `Fouille : ${place}`, now);
   if (!paid.ok) return { ok: false, message: paid.reason ?? 'Impossible d’encaisser.' };
-  return { ok: true, message: `🔎 Tu fouilles ${place} et trouves **${formatMoney(config, paid.amount)}**.`, amount: paid.amount };
+  const prog = progression(state, account, config, paid.amount, now, 'search');
+  return {
+    ok: true,
+    message: `🔎 Tu fouilles ${place} et trouves **${formatMoney(config, paid.amount)}**.`,
+    amount: paid.amount,
+    ...prog,
+  };
 }
 
 // ------------------------------------------------------------
@@ -459,6 +519,10 @@ export function pruneExpiredItems(account: EconomyAccount, now: Date = new Date(
   return before - account.items.length;
 }
 
+// ------------------------------------------------------------
+//  Récompenses passives (messages, vocal, réactions)
+// ------------------------------------------------------------
+
 export interface PassiveReward {
   ok: boolean;
   amount: number;
@@ -480,11 +544,12 @@ export function runMessageReward(
     ? Math.min(config.messageStreakMaxPercent, account.messageStreak * config.messageStreakPercent) / 100
     : 0;
   const shopBooster = boosterBonusPercent(account, now) / 100;
-  const raw = applyBoost(
-    config,
-    roleIds,
-    randomInt(config.messageMin, config.messageMax, rng) * (1 + streakBonus + shopBooster),
-  );
+  const raw =
+    applyBoost(
+      config,
+      roleIds,
+      randomInt(config.messageMin, config.messageMax, rng) * (1 + streakBonus + shopBooster),
+    ) * progressionMultiplier(config, account);
   let amount = config.roundAmounts ? Math.round(raw) : raw;
 
   let capped = false;
@@ -502,6 +567,7 @@ export function runMessageReward(
   if (!paid.ok) return { ok: false, amount: 0 };
   account.earnedFromMessagesToday += paid.amount;
   setCooldown(account, 'message', config.messageCooldownSeconds, now);
+  awardXp(account, config, paid.amount, now);
   void state;
   return { ok: true, amount: paid.amount, capped };
 }
@@ -517,7 +583,7 @@ export function runVoiceReward(
   if (!config.enabled || !config.voiceRewardEnabled || minutes <= 0) return { ok: false, amount: 0 };
 
   const perMinute = randomInt(config.voiceMinPerHour, config.voiceMaxPerHour, rng) / 60;
-  let amount = applyBoost(config, roleIds, perMinute * minutes);
+  let amount = applyBoost(config, roleIds, perMinute * minutes) * progressionMultiplier(config, account);
 
   if (config.voiceDailyCapEnabled && config.voiceDailyCap > 0) {
     const room = config.voiceDailyCap - account.earnedFromVoiceToday;
@@ -530,6 +596,7 @@ export function runVoiceReward(
   const paid = credit(account, config, amount, 'voice', `Vocal (${Math.round(minutes)} min)`, now);
   if (!paid.ok) return { ok: false, amount: 0 };
   account.earnedFromVoiceToday += paid.amount;
+  awardXp(account, config, paid.amount, now);
   void state;
   return { ok: true, amount: paid.amount };
 }
@@ -583,6 +650,7 @@ export function applyBankInterest(
     account.totalEarned += credited;
     account.updatedAt = now.toISOString();
     pushTransaction(account, config, { type: 'interest', amount: credited, label: 'Intérêts bancaires' }, now);
+    awardXp(account, config, credited, now);
     members += 1;
     total += credited;
   }

@@ -108,14 +108,21 @@ export function casesOf(state: StoreState, userId: string): ModCase[] {
   return state.cases.filter((modCase) => modCase.userId === userId);
 }
 
+/**
+ * Retrouve un dossier par identifiant complet, par numéro (« 2 », « 0002 »,
+ * « CAS-0002 ») ou par préfixe d'identifiant. Une référence purement numérique
+ * désigne toujours un numéro de dossier : elle ne doit jamais correspondre
+ * par hasard à l'identifiant d'un autre dossier (UUID commençant par 2, etc.).
+ */
 export function findCase(state: StoreState, idOrNumber: string): ModCase | null {
   const value = idOrNumber.trim();
-  return (
-    state.cases.find((modCase) => modCase.id === value) ??
-    state.cases.find((modCase) => modCase.id.startsWith(value)) ??
-    state.cases.find((modCase) => String(modCase.number) === value.replace(/\D/g, '')) ??
-    null
-  );
+  const exact = state.cases.find((modCase) => modCase.id === value);
+  if (exact) return exact;
+  if (/^(?:cas-?)?\d+$/i.test(value)) {
+    const number = Number(value.replace(/\D/g, ''));
+    return state.cases.find((modCase) => modCase.number === number) ?? null;
+  }
+  return state.cases.find((modCase) => modCase.id.startsWith(value)) ?? null;
 }
 
 export function revokeCase(state: StoreState, id: string, by: string): ModCase | null {

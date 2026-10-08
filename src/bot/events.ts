@@ -57,6 +57,10 @@ import { handleChatInput, handleConfessionModal, handleEmbedModalSubmit } from '
 import { markReviewMessageHandled, publishConfession, rejectConfession } from './confessions';
 import { handleBlackjackButton } from './blackjack';
 import { handleShopButton, handleShopSelect } from './shop';
+import { handleCasinoSelect, handleGameButton } from './games';
+import { handleJobsButton, handleJobsSelect } from './income';
+import { handleEcoButton, handleEcoMenuButton, handleEcoSelect } from './menu';
+import { handlePrestigeButton } from './features';
 import { moderationChannel } from './moderation';
 import {
   deleteRoom,
@@ -535,6 +539,9 @@ async function onInteraction(interaction: Interaction): Promise<void> {
     if (interaction.isStringSelectMenu()) {
       if (await handleUiSelect(interaction)) return;
       if (await handleShopSelect(interaction)) return;
+      if (await handleCasinoSelect(interaction)) return;
+      if (await handleJobsSelect(interaction)) return;
+      if (await handleEcoSelect(interaction)) return;
       return;
     }
     if (interaction.isModalSubmit()) {
@@ -659,6 +666,29 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
   // blackjack
   if (interaction.customId.startsWith('bj:')) {
     await handleBlackjackButton(interaction);
+    return;
+  }
+  // casino (mines, crash)
+  if (interaction.customId.startsWith('game:')) {
+    await handleGameButton(interaction);
+    return;
+  }
+  // rôles de revenu (/jobs)
+  if (interaction.customId.startsWith('jobs:buy:')) {
+    await handleJobsButton(interaction);
+    return;
+  }
+  // menu interactif de l’économie (/eco)
+  if (interaction.customId.startsWith('eco:')) {
+    if (interaction.customId === 'eco:menu') {
+      await handleEcoMenuButton(interaction);
+      return;
+    }
+    if (interaction.customId.startsWith('eco:prestige')) {
+      await handlePrestigeButton(interaction);
+      return;
+    }
+    await handleEcoButton(interaction);
     return;
   }
   // boutique

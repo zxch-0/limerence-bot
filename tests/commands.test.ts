@@ -7,6 +7,7 @@ import { CHANNEL_SLOTS } from '../src/lib/types';
 import {
   buildCommands,
   COMMAND_COUNT,
+  casinoCommands,
   economyCommands,
   moderationCommands,
   utilityCommands,
@@ -25,6 +26,7 @@ function subcommands(command: CommandDefinition): AnyOption[] {
 
 const ALL: Array<{ group: string; commands: CommandDefinition[] }> = [
   { group: 'économie', commands: economyCommands() },
+  { group: 'casino', commands: casinoCommands() },
   { group: 'modération', commands: moderationCommands() },
   { group: 'communauté', commands: utilityCommands() },
 ];

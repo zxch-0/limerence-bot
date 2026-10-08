@@ -40,6 +40,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
         { href: '/economy', label: 'Configuration', emoji: '💰' },
         { href: '/economy/players', label: 'Comptes des membres', emoji: '👥' },
         { href: '/blackjack', label: 'Blackjack', emoji: '🃏', badge: openTables || undefined },
+        { href: '/casino', label: 'Casino', emoji: '🎰' },
         { href: '/shop', label: 'Boutique', emoji: '🛒', badge: state.shopItems.length || undefined },
       ],
     },

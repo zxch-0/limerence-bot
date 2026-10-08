@@ -1,5 +1,6 @@
 import { DEFAULT_ECONOMY_CONFIG } from './economy/config';
 import { DEFAULT_BLACKJACK_CONFIG } from './blackjack/config';
+import { DEFAULT_GAMES_CONFIG } from './games/config';
 import { DEFAULT_SHOP_CONFIG } from './shop/config';
 import { DEFAULT_MODERATION_CONFIG } from './moderation/config';
 import { DEFAULT_UI_CONFIG } from './ui/config';
@@ -66,6 +67,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   economy: structuredClone(DEFAULT_ECONOMY_CONFIG),
   blackjack: structuredClone(DEFAULT_BLACKJACK_CONFIG),
+  games: structuredClone(DEFAULT_GAMES_CONFIG),
   shop: structuredClone(DEFAULT_SHOP_CONFIG),
   moderation: structuredClone(DEFAULT_MODERATION_CONFIG),
   ui: structuredClone(DEFAULT_UI_CONFIG),
@@ -106,6 +108,7 @@ export function mergeConfig(base: AppConfig, override: Partial<AppConfig> | unde
   // toute option manquante est complétée, toute valeur hors bornes est corrigée
   merged.economy = mergeValues(DEFAULT_ECONOMY_CONFIG, override.economy as never);
   merged.blackjack = mergeValues(DEFAULT_BLACKJACK_CONFIG, override.blackjack as never);
+  merged.games = mergeValues(DEFAULT_GAMES_CONFIG, override.games as never);
   merged.shop = mergeValues(DEFAULT_SHOP_CONFIG, override.shop as never);
   merged.moderation = mergeValues(DEFAULT_MODERATION_CONFIG, override.moderation as never);
   merged.ui = mergeValues(DEFAULT_UI_CONFIG, override.ui as never);

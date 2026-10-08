@@ -5,6 +5,8 @@ import { addLog } from '../lib/logs';
 import { processDueAnnouncements } from './announcements';
 import { reconcileTempRooms } from './tempRooms';
 import { expireTimedOutGames } from './blackjack';
+import { scheduledLotteryDraw, scheduledMarketTick } from './features';
+import { expireSessions } from '../lib/games/table';
 import { applyBankInterest } from '../lib/economy/actions';
 import { processDrops, processVoiceRewards } from './rewards';
 import { restock } from '../lib/shop/items';
@@ -47,6 +49,11 @@ export function startScheduler(client: Client): void {
 
       // 1) parties de blackjack abandonnées par le temps (toujours, même sans serveur)
       await expireTimedOutGames().catch(() => undefined);
+
+      // 1bis) sessions de casino interactives (mines, crash) expirées
+      if (Object.keys(state.meta.gameSessions ?? {}).length) {
+        await updateState((s) => expireSessions(s, s.config.economy)).catch(() => undefined);
+      }
 
       if (!guild) return;
 
@@ -110,6 +117,21 @@ export function startScheduler(client: Client): void {
           }
         }
       }
+
+      // 6bis) bourse : fluctuation des cours selon la période configurée
+      const economyNow = state.config.economy;
+      const marketDue = economyNow.marketEnabled
+        ? Date.now() - (state.meta.market?.lastTickAt ? new Date(state.meta.market.lastTickAt).getTime() : 0) >=
+          Math.max(1, economyNow.marketTickMinutes) * 60_000
+        : false;
+      if (marketDue) await scheduledMarketTick().catch(() => undefined);
+
+      // 6ter) loterie : tirage automatique toutes les X heures
+      const lotteryDue = economyNow.lotteryEnabled
+        ? Date.now() - (state.meta.lottery?.lastDrawAt ? new Date(state.meta.lottery.lastDrawAt).getTime() : 0) >=
+          Math.max(1, economyNow.lotteryDrawEveryHours) * 3_600_000
+        : false;
+      if (lotteryDue) await scheduledLotteryDraw().catch(() => undefined);
 
       // 7) cagnottes (toutes les minutes)
       if (tickCount % 2 === 0) await processDrops(guild).catch(() => undefined);
