@@ -54,6 +54,7 @@ import {
   claimDrop,
 } from './rewards';
 import { handleChatInput, handleConfessionModal, handleEmbedModalSubmit } from './commands';
+import { handleGiveawayButton } from './giveaways';
 import { markReviewMessageHandled, publishConfession, rejectConfession } from './confessions';
 import { handleBlackjackButton } from './blackjack';
 import { handleShopButton, handleShopSelect } from './shop';
@@ -663,6 +664,11 @@ async function handleButton(interaction: ButtonInteraction): Promise<void> {
     return;
   }
 
+  // giveaways (bouton « Participer »)
+  if (interaction.customId.startsWith('gway:')) {
+    await handleGiveawayButton(interaction);
+    return;
+  }
   // blackjack
   if (interaction.customId.startsWith('bj:')) {
     await handleBlackjackButton(interaction);

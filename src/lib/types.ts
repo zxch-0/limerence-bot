@@ -189,6 +189,39 @@ export interface Announcement {
 }
 
 // ------------------------------------------------------------
+//  Giveaways (hébergés par l’équipe)
+// ------------------------------------------------------------
+
+export type GiveawayStatus = 'active' | 'ended' | 'cancelled';
+
+export interface Giveaway {
+  id: string;
+  guildId: string;
+  /** salon où le message du giveaway est publié */
+  channelId: string;
+  /** message Discord de l’annonce (bouton « Participer ») */
+  messageId?: string;
+  /** libellé du lot affiché publiquement */
+  prize: string;
+  /** complément d’information affiché sous le lot */
+  description?: string;
+  /** nombre de gagnants tirés à la fin */
+  winnerCount: number;
+  /** montant crédité à chaque gagnant (0 = lot non monétaire) */
+  rewardAmount: number;
+  /** date de fin (ISO) : le tirage a lieu à ce moment */
+  endsAt: string;
+  status: GiveawayStatus;
+  createdBy: string;
+  createdAt: string;
+  endedAt?: string;
+  /** identifiants des membres ayant participé (bouton) */
+  participants: string[];
+  /** identifiants des gagnants tirés */
+  winners: string[];
+}
+
+// ------------------------------------------------------------
 //  Journal
 // ------------------------------------------------------------
 
@@ -242,6 +275,7 @@ export type TransactionType =
   | 'deposit'
   | 'withdraw'
   | 'admin'
+  | 'giveaway'
   | 'reset';
 
 export interface Transaction {
@@ -647,6 +681,8 @@ export interface StoreState {
   config: AppConfig;
   confessions: Confession[];
   announcements: Announcement[];
+  /** giveaways hébergés par l’équipe */
+  giveaways: Giveaway[];
   embeds: EmbedTemplate[];
   logs: LogEntry[];
   tempRooms: TempRoom[];

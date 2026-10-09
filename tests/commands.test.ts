@@ -9,6 +9,7 @@ import {
   COMMAND_COUNT,
   casinoCommands,
   economyCommands,
+  giveawayCommands,
   moderationCommands,
   utilityCommands,
   type CommandDefinition,
@@ -29,6 +30,7 @@ const ALL: Array<{ group: string; commands: CommandDefinition[] }> = [
   { group: 'casino', commands: casinoCommands() },
   { group: 'modération', commands: moderationCommands() },
   { group: 'communauté', commands: utilityCommands() },
+  { group: 'giveaways', commands: giveawayCommands() },
 ];
 
 test('toutes les commandes ont un nom et une description valides', () => {
@@ -105,6 +107,7 @@ test('la surface de commandes couvre l’économie, le blackjack, la boutique et
     'aide',
     'confession',
     'annonce',
+    'giveaway',
     'embed',
     'regles',
     'vocal',
