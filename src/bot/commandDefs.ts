@@ -4,6 +4,7 @@ import {
   SlashCommandBuilder,
   type SlashCommandChannelOption,
   type SlashCommandOptionsOnlyBuilder,
+  type SlashCommandStringOption,
   type SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
 import { CHANNEL_SLOTS, CHANNEL_SLOT_META } from '../lib/types';
@@ -767,8 +768,74 @@ export function casinoCommands(): CommandDefinition[] {
   ];
 }
 
+// ------------------------------------------------------------
+//  Giveaways (hébergés par l’équipe)
+// ------------------------------------------------------------
+
+export function giveawayCommands(): CommandDefinition[] {
+  const idOption = (o: SlashCommandStringOption): SlashCommandStringOption =>
+    o.setName('id').setDescription('ID (8 premiers caractères) ou libellé du lot').setRequired(true).setMaxLength(200);
+
+  return [
+    new SlashCommandBuilder()
+      .setName('giveaway')
+      .setDescription('Organiser un giveaway (réservé à l’équipe)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .setDMPermission(false)
+      .addSubcommand((s) =>
+        s
+          .setName('creer')
+          .setDescription('Lancer un giveaway avec un bouton « Participer »')
+          .addStringOption((o) =>
+            o.setName('lot').setDescription('Lot affiché (ex : 5 000 💵, rôle VIP…)').setRequired(true).setMaxLength(200),
+          )
+          .addStringOption((o) =>
+            o
+              .setName('duree')
+              .setDescription('Durée : 30m, 2h, 3j ou date 2026-10-06T20:00')
+              .setRequired(true)
+              .setMaxLength(32),
+          )
+          .addIntegerOption((o) =>
+            o.setName('gagnants').setDescription('Nombre de gagnants (défaut : 1)').setMinValue(1).setMaxValue(25),
+          )
+          .addIntegerOption((o) =>
+            o
+              .setName('montant')
+              .setDescription('Montant crédité à chaque gagnant (0 = lot symbolique)')
+              .setMinValue(0)
+              .setMaxValue(1_000_000_000),
+          )
+          .addChannelOption((o) =>
+            textChannel(o.setName('salon').setDescription('Salon de publication (défaut : salon courant)')),
+          )
+          .addStringOption((o) =>
+            o.setName('message').setDescription('Précisions affichées sous le lot').setMaxLength(1000),
+          ),
+      )
+      .addSubcommand((s) => s.setName('liste').setDescription('Voir les giveaways (actifs et récents)'))
+      .addSubcommand((s) => s.setName('info').setDescription('Détails d’un giveaway').addStringOption(idOption))
+      .addSubcommand((s) =>
+        s.setName('terminer').setDescription('Tirer les gagnants maintenant').addStringOption(idOption),
+      )
+      .addSubcommand((s) => s.setName('annuler').setDescription('Annuler un giveaway (sans gagnant)').addStringOption(idOption))
+      .addSubcommand((s) =>
+        s
+          .setName('reroll')
+          .setDescription('Re-tirer un gagnant parmi les participants non gagnants')
+          .addStringOption(idOption),
+      ),
+  ];
+}
+
 export function buildCommands(): CommandDefinition[] {
-  return [...economyCommands(), ...casinoCommands(), ...moderationCommands(), ...utilityCommands()];
+  return [
+    ...economyCommands(),
+    ...casinoCommands(),
+    ...moderationCommands(),
+    ...utilityCommands(),
+    ...giveawayCommands(),
+  ];
 }
 
 export const COMMAND_COUNT = buildCommands().length;

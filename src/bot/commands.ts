@@ -36,6 +36,7 @@ import { handleJobsCommand, handleIncomeCommand } from './income';
 import { handleFeaturesCommand } from './features';
 import { handleModerationCommand } from './moderationCommands';
 import { handleConfigCommand } from './config';
+import { handleGiveawayCommand } from './giveaways';
 import {
   allowMember,
   deleteRoom,
@@ -239,6 +240,9 @@ export async function handleChatInput(
     case 'annonce':
     case 'annonces':
       await handleAnnouncement(interaction, name);
+      return;
+    case 'giveaway':
+      await handleGiveawayCommand(interaction);
       return;
     case 'embed':
     case 'regles':

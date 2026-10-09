@@ -16,10 +16,12 @@ dans le panel, et il apporte tout le reste :
 - 🛡️ une **modération avancée** avec **avertissements + message privé automatique**, dossiers numérotés,
   sanctions graduées et auto-modération — **59 options** ;
 - 🪄 confessions anonymes, annonces programmées, embeds personnalisés, vocaux temporaires ;
+- 🎉 **giveaways hébergés par l’équipe** : bouton « Participer », tirage automatique à la fin,
+  crédit des gagnants, re-tirage (`/giveaway`) ;
 - 🎨 un **système d'interface unifié** : thème, menu central `/panel` et cartes par section —
   **41 options**.
 
-**383 options** au total, **67 commandes slash**, et un seul service à déployer : le bot et le panel
+**383 options** au total, **68 commandes slash**, et un seul service à déployer : le bot et le panel
 tournent dans le même process Node (plan gratuit Render possible).
 
 ---
@@ -264,17 +266,17 @@ npm run build       # build Next.js de production
 npm test            # suite de tests (logique économie, blackjack, boutique, modération, bot)
 ```
 
-La suite de tests (`tests/`) couvre la logique métier pure : 129 tests répartis sur la
+La suite de tests (`tests/`) couvre la logique métier pure : 139 tests répartis sur la
 normalisation des configurations, l'économie (gains, plafonds, intérêts, transferts), le règlement du
 blackjack (payouts, assurance, partage, taxes), la boutique (achats, stock, revente, réassort), la
-modération (dossiers, paliers, auto-modération, MP de sanction), la persistance et l'intégrité des
-67 commandes slash.
+modération (dossiers, paliers, auto-modération, MP de sanction), les giveaways (tirage, participations,
+persistance), la persistance et l'intégrité des 68 commandes slash.
 
 ---
 
 ## 9. Commandes Discord
 
-**67 commandes** enregistrées au démarrage.
+**68 commandes** enregistrées au démarrage.
 
 ### Économie & jeux (15)
 
@@ -303,6 +305,13 @@ etat) · `/aide`
 `/confession` · `/annonce` · `/annonces` (liste, annuler) · `/embed` (creer, liste, publier, modifier,
 supprimer) · `/regles` · `/vocal` (renommer, limite, verrouiller, autoriser, expulser, transferer,
 supprimer, reclamer) · `/panel` · `/ping` · `/config` (voir, salon, supprimer)
+
+### Giveaways (1)
+
+`/giveaway` (creer, liste, info, terminer, annuler, reroll) — réservé à l’équipe (**Gérer le serveur**).
+Un giveaway est publié avec un bouton **🎉 Participer** (cliquer à nouveau désinscrit) ; à la fin
+prévue, le bot tire les gagnants au sort, crédite la récompense (option `montant`) et annonce les
+résultats. Le tirage se poursuit automatiquement après un redémarrage du bot.
 
 ---
 

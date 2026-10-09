@@ -3,6 +3,7 @@ import { getGuild } from '../lib/discord/client';
 import { getState, updateState } from '../lib/store';
 import { addLog } from '../lib/logs';
 import { processDueAnnouncements } from './announcements';
+import { processDueGiveaways } from './giveaways';
 import { reconcileTempRooms } from './tempRooms';
 import { expireTimedOutGames } from './blackjack';
 import { scheduledLotteryDraw, scheduledMarketTick } from './features';
@@ -60,6 +61,12 @@ export function startScheduler(client: Client): void {
       // 2) annonces programmées
       const sent = await processDueAnnouncements(guild).catch(() => 0);
       if (sent) console.log(`[scheduler] ${sent} annonce(s) envoyée(s)`);
+
+      // 2bis) giveaways arrivés à échéance (tirage automatique des gagnants)
+      if (state.giveaways.some((giveaway) => giveaway.status === 'active')) {
+        const ended = await processDueGiveaways(guild).catch(() => 0);
+        if (ended) console.log(`[scheduler] ${ended} giveaway(s) terminé(s)`);
+      }
 
       // 3) récompenses vocales (à chaque tick)
       await processVoiceRewards(guild).catch(() => undefined);
